@@ -36,7 +36,7 @@ Run with:
 
 `ln -s /etc/nginx/sites-available/mainsail /etc/nginx/sites-enabled/`
 
-`echo "manually add `include /etc/nginx/conf.d/*.conf; include /etc/nginx/sites-enabled/*;` to /etc/nginx/nginx.conf http { .. } section"`
+`echo "manually add "include /etc/nginx/conf.d/*.conf; include /etc/nginx/sites-enabled/*;" to /etc/nginx/nginx.conf's 'http { .. } section'"`
 
 
 
