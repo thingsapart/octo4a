@@ -7,7 +7,9 @@
 
 `git clone https://github.com/Arksine/moonraker.git`
 
-`cd moonrakerpip3 install -U pip setuptools wheel`
+`cd moonraker`
+
+`pip3 install -U pip setuptools wheel`
 
 ```for n in tornado pyserial pillow lmdb libnacl paho-mqtt pycurl streaming-form-data
 do
