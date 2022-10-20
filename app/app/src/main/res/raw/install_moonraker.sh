@@ -67,5 +67,11 @@ function run() {
 
 run
 
-echo "DONE INSTALLING MOONRAKER"
+# Fix config mainsail nginx config:
+# Change serving root directory to /root and listen on port 3000
+# (Android blocks privileged ports).
+sed -i -g "s/listen 80/listen 3000/g" /etc/nginx/sites-enabled/mainsail
+sed -i -g "s/\/home\/root\//\/root\//g" /etc/nginx/sites-enabled/mainsail
+
+echo ">> DONE INSTALLING MOONRAKER"
 exit 0

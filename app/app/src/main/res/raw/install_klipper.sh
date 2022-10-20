@@ -39,7 +39,7 @@ klipper_setup "${user_input[@]}"
 # So copy a preload script and rewrite KLIPPY_ENV to call this from systemd scripts instead and prefix
 # the intended command.
 cp ${SCRIPT_DIR}/ld_preload.sh ${KLIPPY_ENV}
-KLIPPY_ENV="${KLIPPY_ENV}ld_preload.sh ${KLIPPY_ENV}"
+KLIPPY_ENV="${KLIPPY_ENV}/ld_preload.sh ${KLIPPY_ENV}"
 
 # Copied from Kiauh callsite of write_klipper_service(), here we call it again with modified KLIPPY_ENV
 # to rewrite systemd service with proper ld-preload. We can't monkey-patch KLIPPY_ENV earlier.
@@ -53,6 +53,6 @@ service="${SYSTEMD}/klipper.service"
 sudo rm -f ${service}
 write_klipper_service "" "${cfg}" "${log}" "${printer}" "${uds}" "${service}"
 
-echo "DONE INSTALLING KLIPPER"
+echo ">> DONE INSTALLING KLIPPER"
 
 exit 0

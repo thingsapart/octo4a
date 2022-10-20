@@ -69,5 +69,5 @@ function run() {
 
 run
 
-echo "DONE INSTALLING MAINSAIL"
+echo ">> DONE INSTALLING MAINSAIL"
 exit 0

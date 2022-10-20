@@ -3,6 +3,10 @@
 set -e
 set -x
 
+groupadd moonraker-admin
+usermod -a -G moonraker-admin klipper
+usermod -a -G moonraker-admin root
+
 cd
 chmod 700 /etc/dpkg/dpkg.cfg.d
 apt-get install -q -y python3 python3-virtualenv virtualenv git unzip 2>&1 || true

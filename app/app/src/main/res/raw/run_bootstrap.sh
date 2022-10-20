@@ -41,5 +41,5 @@ shift
 echo "PATH: $PATH"
 
 #./root/bin/proot -r bootstrap -0 -b /dev -b /proc -b /sys -b /system -b /vendor -b /storage -b ${PWD}/fake_proc_stat:/proc/stat $EXTRA_BIND --link2symlink -p -L -w $HOME /usr/bin/sudo -u klipper -s -- "/bin/sh" "-c" "$@"
-PATH=$PATH ./root/bin/proot -r bootstrap $OP -b /dev -b /proc -b /sys -b /system -b /vendor -b /storage -b ${PWD}/fake_proc_stat:/proc/stat $EXTRA_BIND --link2symlink -p -L -w $HOME "/bin/bash" "-l" "-c" "$@"
+PATH=$PATH ./root/bin/proot -r bootstrap $OP -b /dev -b /proc -b /sys -b /system -b /vendor -b /storage -b ${PWD}/fake_proc_stat:/proc/stat $EXTRA_BIND --link2symlink -p -L -w $HOME "/bin/bash" "-l" "-c" "$@; exit 0"
 # ./root/bin/proot -r bootstrap -0 -b /dev -b /proc -b /sys -b /system -b /vendor -b /storage -b ${PWD}/fake_proc_stat:/proc/stat $EXTRA_BIND --link2symlink -p 80:3000 -L -w $HOME /bin/su -l $USER -c -- "$@"

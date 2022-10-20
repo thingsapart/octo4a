@@ -165,13 +165,13 @@ class KlipperHandlerRepositoryImpl(
                     // Virtualenv otherwise fails with permission denied in proot.
                     copyResToBootstrap(R.raw.virtualenv, "/root/virtualenv")
 
-                    runCommand("cd /root; /bin/bash ./get_kiauh.sh", root=true).waitAndPrintOutput(logger)
+                    runCommand("cd /root; ./get_kiauh.sh", root=true).waitAndPrintOutput(logger)
                     runCommand("cd /root/kiauh; ls", root=true).waitAndPrintOutput(logger)
 
                     setInstallationProgress(35)
 
                     //runProot("cd kiauh; echo 'yes' | bash ./install_klipper.sh", root=true).waitAndPrintOutput(logger)
-                    runCommand("cd /root/kiauh; echo 'yes' | ./install_klipper.sh", root=true).waitAndPrintOutput(logger)
+                    runCommand("cd /root/kiauh; echo 'yes' | ./install_klipper.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
 
                     logger.log { "Klipper installed" }
                     setInstallationProgress(40)
@@ -180,7 +180,7 @@ class KlipperHandlerRepositoryImpl(
                 _serverState.emit(KlipperServerStatus.InstallingMoonraker)
                 bootstrapRepository.apply {
                     logger.log { "Installing Moonraker" }
-                    runCommand("cd /root/kiauh; ./install_moonraker.sh", root=true).waitAndPrintOutput(logger)
+                    runCommand("cd /root/kiauh; ./install_moonraker.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
                     logger.log { "Moonraker installed" }
 
                     setInstallationProgress(85)
@@ -189,7 +189,7 @@ class KlipperHandlerRepositoryImpl(
                 _serverState.emit(KlipperServerStatus.InstallingMainsail)
                 bootstrapRepository.apply {
                     logger.log { "Installing Mainsail" }
-                    runCommand("cd /root/kiauh; ./install_mainsail.sh", root=true).waitAndPrintOutput(logger)
+                    runCommand("cd /root/kiauh; ./install_mainsail.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
                     logger.log { "Mainsail installed" }
 
                     setInstallationProgress(95)

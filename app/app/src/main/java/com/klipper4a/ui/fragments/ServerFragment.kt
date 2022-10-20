@@ -123,10 +123,12 @@ class ServerFragment : Fragment() {
         btnExec.setOnClickListener {
             bootstrapRepository.apply {
                 copyRes(R.raw.run_bootstrap, "run-distro.sh")
-                runCommand("chmod a+x run-distro.sh", prooted = false).waitAndPrintOutput(logger)
-                bootstrapRepository.runProot("cd kiauh; bash ./install_klipper.sh", root = false).waitAndPrintOutput(logger)
-                bootstrapRepository.runProot("cd kiauh; bash ./install_moonraker.sh", root = false).waitAndPrintOutput(logger)
-                bootstrapRepository.runProot("cd kiauh; bash ./install_mainsail.sh", root = false).waitAndPrintOutput(logger)
+                copyRes(R.raw.run_bootstrap, "run-bootstrap.sh")
+                bootstrapRepository.runCommand("chmod a+x .", prooted = false).waitAndPrintOutput(logger)
+
+                bootstrapRepository.runCommand("cd kiauh; echo yes | ./install_klipper.sh", root = true).waitAndPrintOutput(logger)
+                bootstrapRepository.runCommand("cd kiauh; ./install_moonraker.sh", root = true).waitAndPrintOutput(logger)
+                bootstrapRepository.runCommand("cd kiauh; ./install_mainsail.sh", root = true).waitAndPrintOutput(logger)
             }
         }
 
