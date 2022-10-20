@@ -7,4 +7,5 @@ import com.klipper4a.repository.OctoPrintHandlerRepository
 
 class InstallationViewModel(private val klipperHandlerRepository: KlipperHandlerRepository) : ViewModel() {
     val serverStatus = klipperHandlerRepository.serverState.asLiveData()
+    val installationProgress = klipperHandlerRepository.installationProgress.asLiveData()
 }

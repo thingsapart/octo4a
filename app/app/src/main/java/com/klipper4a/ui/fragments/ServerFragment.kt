@@ -23,6 +23,7 @@ import androidx.lifecycle.asLiveData
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.klipper4a.R
 import com.klipper4a.camera.CameraService
+import com.klipper4a.repository.BootstrapRepository
 import com.klipper4a.repository.GithubRelease
 import com.klipper4a.repository.LoggerRepository
 import com.klipper4a.repository.ServerStatus
@@ -31,6 +32,7 @@ import com.klipper4a.ui.InitialActivity
 import com.klipper4a.ui.WebinterfaceActivity
 import com.klipper4a.ui.views.UsbDeviceView
 import com.klipper4a.utils.preferences.MainPreferences
+import com.klipper4a.utils.waitAndPrintOutput
 import com.klipper4a.viewmodel.StatusViewModel
 import kotlinx.android.synthetic.main.fragment_server.*
 import kotlinx.android.synthetic.main.view_status_card.view.*
@@ -45,6 +47,7 @@ class ServerFragment : Fragment() {
     private val vspDriver: VirtualSerialDriver by inject()
     private val mainPreferences: MainPreferences by inject()
     private val logger: LoggerRepository by inject()
+    private val bootstrapRepository: BootstrapRepository by inject()
 
     private val cameraServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -114,6 +117,16 @@ class ServerFragment : Fragment() {
         serverStatus.setOnClickListener {
             if (statusViewModel.serverStatus.value == ServerStatus.Running) {
                 openWebInterface()
+            }
+        }
+
+        btnExec.setOnClickListener {
+            bootstrapRepository.apply {
+                copyRes(R.raw.run_bootstrap, "run-distro.sh")
+                runCommand("chmod a+x run-distro.sh", prooted = false).waitAndPrintOutput(logger)
+                bootstrapRepository.runProot("cd kiauh; bash ./install_klipper.sh", root = false).waitAndPrintOutput(logger)
+                bootstrapRepository.runProot("cd kiauh; bash ./install_moonraker.sh", root = false).waitAndPrintOutput(logger)
+                bootstrapRepository.runProot("cd kiauh; bash ./install_mainsail.sh", root = false).waitAndPrintOutput(logger)
             }
         }
 

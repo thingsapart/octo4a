@@ -15,14 +15,11 @@ import androidx.preference.*
 import com.klipper4a.Klipper4aApplication
 import com.klipper4a.camera.*
 import com.klipper4a.camera.CameraService
-import com.klipper4a.repository.ExtrasStatus
-import com.klipper4a.repository.LoggerRepository
 import com.klipper4a.utils.isServiceRunning
 import com.klipper4a.utils.preferences.MainPreferences
 import org.koin.android.ext.android.inject
 import com.klipper4a.R
-import com.klipper4a.repository.KlipperExtrasStatus
-import com.klipper4a.repository.KlipperHandlerRepository
+import com.klipper4a.repository.*
 
 class SettingsFragment : PreferenceFragmentCompat() {
     private val cameraEnumerationRepository: CameraEnumerationRepository by inject()

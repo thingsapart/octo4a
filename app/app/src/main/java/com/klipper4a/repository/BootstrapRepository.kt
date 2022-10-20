@@ -1,7 +1,6 @@
 package com.klipper4a.repository
 
 import android.content.Context
-import android.content.res.Resources
 import android.os.Build
 import android.util.Pair
 import com.klipper4a.BuildConfig
@@ -9,8 +8,10 @@ import com.klipper4a.R
 import com.klipper4a.utils.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
+import org.koin.java.KoinJavaComponent.inject
 import java.io.*
 import java.net.URL
 import java.util.zip.ZipInputStream
@@ -20,9 +21,11 @@ import javax.net.ssl.SSLSocketFactory
 
 interface BootstrapRepository {
     val commandsFlow: SharedFlow<String>
-    suspend fun setupBootstrap()
+    suspend fun setupBootstrap(progress: MutableStateFlow<Int>)
     fun runCommand(command: String, prooted: Boolean = true, root: Boolean = true, bash: Boolean = false): Process
+    fun runProot(command: String, root: Boolean): Process
     fun copyResToBootstrap(resId: Int, destinationRelativePath: String)
+    fun copyRes(resId: Int, destinationRelativePath: String)
     fun ensureHomeDirectory()
     fun resetSSHPassword(newPassword: String)
     val isBootstrapInstalled: Boolean
@@ -35,9 +38,9 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         private val FILES_PATH = "/data/data/com.klipper4a/files"
         val PREFIX_PATH = "$FILES_PATH/bootstrap"
         val HOME_PATH = "$FILES_PATH/home"
-        val DISTRO_NAME = "ubuntu"
+        const val DISTRO_NAME = "ubuntu"
     }
-    val filesPath: String by lazy { context.getExternalFilesDir(null).absolutePath }
+    private val filesPath: String by lazy { context.getExternalFilesDir(null).absolutePath }
     private var _commandsFlow = MutableSharedFlow<String>(100)
     override val commandsFlow: SharedFlow<String>
         get() = _commandsFlow
@@ -88,12 +91,19 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         transfer(context.resources.openRawResource(resId), out)
     }
 
-    override suspend fun setupBootstrap() {
+    override fun copyRes(resId: Int, destinationRelativePath: String) {
+        val out = FileOutputStream("$PREFIX_PATH/$destinationRelativePath")
+        transfer(context.resources.openRawResource(resId), out)
+    }
+
+    override suspend fun setupBootstrap(progress: MutableStateFlow<Int>) {
         withContext(Dispatchers.IO) {
             val PREFIX_FILE = File(PREFIX_PATH)
             if (PREFIX_FILE.isDirectory) {
                 return@withContext
             }
+
+            progress.emit(0)
 
             try {
                 val arch = getArchString()
@@ -137,38 +147,61 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 if (!STAGING_PREFIX_FILE.renameTo(PREFIX_FILE)) {
                     throw RuntimeException("Unable to rename staging folder")
                 }
+
+                copyRes(R.raw.run_bootstrap, "run-distro.sh")
+                runCommand("chmod a+x run-distro.sh", prooted = false).waitAndPrintOutput(logger)
+
                 logger.log(this) { "Bootstrap extracted, setting it up..." }
                 runCommand("ls", prooted = false).waitAndPrintOutput(logger)
                 runCommand("chmod -R 700 .", prooted = false).waitAndPrintOutput(logger)
                 if (shouldUsePre5Bootstrap()) {
                     runCommand("rm -r root && mv root-pre5 root", prooted = false).waitAndPrintOutput(logger)
                 }
+                progress.emit(5)
 
-                logger.log(this) { "Downloading Ubuntu distro..." }
-                val distroAsset = getLatestRelease("termux/proot-distro", arch, "ubuntu")
+                logger.log(this) { "Downloading $DISTRO_NAME distro..." }
+
+                // Not built for Android -- try this https://github.com/green-green-avk/build-proot-android/raw/master/packages/proot-android-${arch}.tar.gz
+                // val prootAsset = getLatestRelease("proot-me/proot", arch, "proot")
+                // val prootConnection = httpsConnection(prootAsset!!.browserDownloadUrl)
+                // runCommand("mv $PREFIX_PATH/root/bin/proot $PREFIX_PATH/root/bin/proot.org", prooted = false).waitAndPrintOutput(logger)
+                // transfer(prootConnection.inputStream, FileOutputStream(PREFIX_PATH + "/root/bin/proot"))
+                // runCommand("chmod a+x $PREFIX_PATH/root/bin/proot", prooted = false).waitAndPrintOutput(logger)
+
+                logger.log(this) { "Downloading $DISTRO_NAME distro..." }
+                val distroAsset = getLatestRelease("termux/proot-distro", arch, DISTRO_NAME)
                 val distroConnection = httpsConnection(distroAsset!!.browserDownloadUrl)
                 runCommand("mv rootfs.tar.xz rootfs.tar.xz.org", prooted = false).waitAndPrintOutput(logger)
                 transfer(distroConnection.inputStream, FileOutputStream(PREFIX_PATH + "/rootfs.tar.xz"))
 
+                progress.emit(15)
+
                 runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
-                runCommand("sh add-user.sh klipper", prooted = false).waitAndPrintOutput(logger)
                 runCommand("cat /etc/lsb-release").waitAndPrintOutput(logger)
-                logger.log(this) { "Installed Ubuntu bootstrap. Configuring..." }
+                logger.log(this) { "Installed $DISTRO_NAME bootstrap. Configuring..." }
 
-                // Setup ssh
-                runCommand("apt-get update", bash = false).waitAndPrintOutput(logger)
-                runCommand("apt-get install -q -y dropbear curl bash sudo python3 git 2>&1", bash = false).waitAndPrintOutput(logger)
+                // Install some dependencies.
+                runCommand("apt-get update --allow-releaseinfo-change").waitAndPrintOutput(logger)
+                runCommand("apt-get install -q -y dropbear curl bash sudo python3 python3-virtualenv virtualenv git unzip 2>&1").waitAndPrintOutput(logger)
+                // python3-virtualenv doesn't seem to work well in (this?) proot - we're supplying our own hacky shim later.
 
-                // Setup docker-systemctl-replacement systemctl simulation
+                progress.emit(20)
+
+                // Setup docker-systemctl-replacement systemctl simulation.
                 runCommand("mv /bin/systemctl /bin/systemctl.org").waitAndPrintOutput(logger)
                 copyResToBootstrap(R.raw.systemctl3, "/bin/systemctl")
                 runCommand("chmod a+x /bin/systemctl").waitAndPrintOutput(logger)
 
-                runCommand("echo \"PermitRootLogin yes\" >> /etc/ssh/sshd_config").waitAndPrintOutput(logger)
-                runCommand("echo 'Port 8022' >> /etc/ssh/sshd_config", bash = false).waitAndPrintOutput(logger)
+                // Setup ssh.
                 runCommand("ssh-keygen -A 2>&1").waitAndPrintOutput(logger)
-                runCommand("echo 'klipper     ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", bash = false).waitAndPrintOutput(logger)
 
+                // Add klipper user.
+                //runCommand("sh add-user.sh klipper", prooted = false).waitAndPrintOutput(logger)
+                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger)
+                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger) // sometimes fails, nop if already exists
+                runCommand("echo 'klipper     ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", root = true, bash = false).waitAndPrintOutput(logger)
+                runCommand("passwd").setPassword("klipper")
+                runCommand("passwd klipper").setPassword("klipper")
 
                 // Turn ssh on for easier debug
                 if (BuildConfig.DEBUG) {
@@ -178,6 +211,8 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 }
 
                 logger.log(this) { "Bootstrap installation done" }
+
+                progress.emit(35)
 
                 return@withContext
             } catch (e: Exception) {
@@ -222,9 +257,10 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         val pb = ProcessBuilder()
         pb.redirectErrorStream(true)
         pb.environment()["HOME"] = "$FILES/bootstrap"
+        pb.environment()["TERM"] = "linux"
         pb.environment()["LANG"] = "'en_US.UTF-8'"
         pb.environment()["PWD"] = "$FILES/bootstrap"
-        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/home/klipper/ioctlHook.so"
+        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
         pb.environment()["PATH"] = "/sbin:/system/sbin:/product/bin:/apex/com.android.runtime/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
         pb.directory(File("$FILES/bootstrap"))
         var user = "root"
@@ -236,6 +272,35 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         } else {
             pb.command("sh", "-c", command)
         }
+        return pb.start()
+    }
+
+    override fun runProot(command: String, root: Boolean): Process {
+        logger.log(this) { ":$> ${command}" }
+
+        val FILES = "/data/data/com.klipper4a/files"
+        val directory = File(filesPath)
+        if (!directory.exists()) {
+            directory.mkdirs()
+        }
+        val pb = ProcessBuilder()
+        pb.redirectErrorStream(true)
+        pb.environment()["HOME"] = "$FILES/bootstrap"
+        pb.environment()["TERM"] = "linux"
+        pb.environment()["LANG"] = "'en_US.UTF-8'"
+        pb.environment()["PWD"] = "$FILES/bootstrap"
+        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
+        pb.environment()["PATH"] = "/sbin:/system/sbin:/product/bin:/apex/com.android.runtime/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
+        pb.directory(File("$FILES/bootstrap"))
+        var user = "root"
+        if (!root) user = "klipper"
+
+        if (!root) {
+            pb.command("sh", "run-distro.sh", user, command)
+        } else {
+            pb.command("sh", "run-distro.sh", user, command)
+        }
+
         return pb.start()
     }
 
