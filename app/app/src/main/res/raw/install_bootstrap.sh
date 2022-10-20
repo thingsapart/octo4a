@@ -14,7 +14,6 @@ export LC_TELEPHONE="en_US.UTF-8"
 export LC_MEASUREMENT="en_US.UTF-8"
 export LC_IDENTIFICATION="en_US.UTF-8"
 
-echo "LOCALE!!"
 locale -a
 env
 
@@ -25,6 +24,12 @@ chmod -R +rx ../
 mkdir bootstrap
 cd bootstrap
 cat ../rootfs.tar.xz | ../root/bin/minitar
+export LANG='en_US.UTF-8'
+LANG='en_US.UTF-8' cat ../rootfs.tar.xz | ../root/bin/minitar
+export LANG='C.UTF-8'
+LANG='C.UTF-8' cat ../rootfs.tar.xz | ../root/bin/minitar
+export LANG='UTF-8'
+LANG='UTF-8' cat ../rootfs.tar.xz | ../root/bin/minitar
 cd ..
 
 # include resolv.conf

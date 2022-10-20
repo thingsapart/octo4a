@@ -136,19 +136,17 @@ class KlipperHandlerRepositoryImpl(
                     _serverState.emit(KlipperServerStatus.InstallingKlipper)
                     bootstrapRepository.apply {
                         logger.log { "Copying setup script files to bootstrap..." }
-                        runCommand("mkdir scripts", root = false, bash = false).waitAndPrintOutput(
+                        runProot("mkdir scripts", root = false).waitAndPrintOutput(
                             logger
                         )
 
                         // Hacky virtualenv shim, just symlinks the system binaries and runs pip as root.
                         // Virtualenv otherwise fails with permission denied in proot.
-                        runCommand("mv /usr/bin/virtualenv /usr/bin/virtualenv.org").waitAndPrintOutput(
+                        runProot("mv /usr/bin/virtualenv /usr/bin/virtualenv.org", root=false).waitAndPrintOutput(
                             logger
                         )
                         copyResToBootstrap(R.raw.virtualenv, "/usr/bin/virtualenv")
-
-                        Thread.sleep(500)
-                        runCommand("chmod a+x /usr/bin/virtualenv").waitAndPrintOutput(logger)
+                        runProot("chmod a+x /usr/bin/virtualenv", root=true).waitAndPrintOutput(logger)
 
                         // Scripts for calling Kiauh directly without the TUI.
                         copyResToHome(
@@ -252,7 +250,7 @@ class KlipperHandlerRepositoryImpl(
         if (_extrasStatus.value == KlipperExtrasStatus.NotInstalled) {
             Thread {
                 _extrasStatus.value = KlipperExtrasStatus.Installing
-                bootstrapRepository.runCommand("curl -s https://raw.githubusercontent.com/feelfreelinux/octo4a/master/scripts/setup-plugin-extras.sh | bash -s")
+                bootstrapRepository.runProot("curl -s https://raw.githubusercontent.com/feelfreelinux/octo4a/master/scripts/setup-plugin-extras.sh | bash -s", root=true)
                     .waitAndPrintOutput(
                         logger
                     )
@@ -315,8 +313,8 @@ class KlipperHandlerRepositoryImpl(
     }
 
     private fun systemctl(action: String, service: String): Process {
-        //return bootstrapRepository.runCommand("systemctl ${action} ${service}")
-        return bootstrapRepository.runCommand("service ${service} ${action}")
+        //return bootstrapRepository.runProot("systemctl ${action} ${service}")
+        return bootstrapRepository.runProot("service ${service} ${action}", root=true)
     }
 
     override fun klipperIsRunning(): Boolean {
@@ -391,13 +389,13 @@ class KlipperHandlerRepositoryImpl(
         bootstrapRepository.apply {
             copyResToHome(R.raw.get_kiauh, "/klipper/get_kiauh.sh")
 
-            runCommand(
+            runProot(
                 "cd /home/klipper; chown klipper get_kiauh.sh; chmod a+x get_kiauh.sh; chown klipper /home/klipper/scripts/*",
-                bash = false
+                root = false
             ).waitAndPrintOutput(logger)
 
             val gitCmd =
-                runCommand("./get_kiauh.sh")
+                runProot("./get_kiauh.sh", root=false)
             gitCmd.waitAndPrintOutput(
                 logger
             )
@@ -409,11 +407,11 @@ class KlipperHandlerRepositoryImpl(
         stopSSH()
         //systemctl("start", "dropbear").waitAndPrintOutput(logger)
         //systemctl("status", "ssh").waitAndPrintOutput(logger)
-        sshdProcess = bootstrapRepository.runCommand("/usr/sbin/dropbear -p 8022", bash = false)
+        sshdProcess = bootstrapRepository.runProot("/usr/sbin/dropbear -p 8022", root=true)
 
-        //bootstrapRepository.runCommand("service ssh status").waitAndPrintOutput(logger)
-        //bootstrapRepository.runCommand("service ssh start").waitAndPrintOutput(logger)
-        //bootstrapRepository.runCommand("service ssh status").waitAndPrintOutput(logger)
+        //bootstrapRepository.runProot("service ssh status").waitAndPrintOutput(logger)
+        //bootstrapRepository.runProot("service ssh start").waitAndPrintOutput(logger)
+        //bootstrapRepository.runProot("service ssh status").waitAndPrintOutput(logger)
     }
 
     override fun stopSSH() {
@@ -422,7 +420,7 @@ class KlipperHandlerRepositoryImpl(
         //systemctl("status", "ssh").waitAndPrintOutput(logger)
 
         sshdProcess?.destroy()
-        //bootstrapRepository.runCommand("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
+        //bootstrapRepository.runProot("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
         logger.log(this) { "killed sshd" }
     }
 

@@ -45,7 +45,7 @@ class MainActivity : AppCompatActivity() {
             showBatteryOptimizationDialog()
         }
 
-        showBugReportingDialog(mainPreferences)
+        //showBugReportingDialog(mainPreferences)
     }
 
     private fun showBatteryOptimizationDialog() {

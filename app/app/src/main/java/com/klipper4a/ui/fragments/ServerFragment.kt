@@ -1,6 +1,5 @@
 package com.klipper4a.ui.fragments
 
-import android.app.Activity
 import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
@@ -11,7 +10,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -23,10 +21,7 @@ import androidx.lifecycle.asLiveData
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.klipper4a.R
 import com.klipper4a.camera.CameraService
-import com.klipper4a.repository.BootstrapRepository
-import com.klipper4a.repository.GithubRelease
-import com.klipper4a.repository.LoggerRepository
-import com.klipper4a.repository.ServerStatus
+import com.klipper4a.repository.*
 import com.klipper4a.serial.VirtualSerialDriver
 import com.klipper4a.ui.InitialActivity
 import com.klipper4a.ui.WebinterfaceActivity
@@ -36,6 +31,9 @@ import com.klipper4a.utils.waitAndPrintOutput
 import com.klipper4a.viewmodel.StatusViewModel
 import kotlinx.android.synthetic.main.fragment_server.*
 import kotlinx.android.synthetic.main.view_status_card.view.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.sharedViewModel
 
@@ -48,6 +46,7 @@ class ServerFragment : Fragment() {
     private val mainPreferences: MainPreferences by inject()
     private val logger: LoggerRepository by inject()
     private val bootstrapRepository: BootstrapRepository by inject()
+    private val klipperHandlerRepository: KlipperHandlerRepository by inject()
 
     private val cameraServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
@@ -121,12 +120,65 @@ class ServerFragment : Fragment() {
         }
 
         btnExec.setOnClickListener {
-            bootstrapRepository.apply {
-                copyRes(R.raw.run_bootstrap, "run-distro.sh")
-                runCommand("chmod a+x run-distro.sh", prooted = false).waitAndPrintOutput(logger)
-                bootstrapRepository.runProot("cd kiauh; bash ./install_klipper.sh", root = false).waitAndPrintOutput(logger)
-                bootstrapRepository.runProot("cd kiauh; bash ./install_moonraker.sh", root = false).waitAndPrintOutput(logger)
-                bootstrapRepository.runProot("cd kiauh; bash ./install_mainsail.sh", root = false).waitAndPrintOutput(logger)
+            runBlocking {
+                withContext(Dispatchers.IO) {
+                    bootstrapRepository.apply {
+                        logger.log { "runProot>>" }
+                        //runProot("ls", root=true).waitAndPrintOutput(logger)
+                        logger.log { "runCommand>>" }
+                        runCommand("ldd ls", root=true).waitAndPrintOutput(logger)
+
+                        //runProot("cat /usr/sbin/dpkg-reconfigure", root=true).waitAndPrintOutput(logger)
+                        //runProot("ls /usr/bin/perl", root=true).waitAndPrintOutput(logger)
+                        //runProot("dpkg-reconfigure", root=true).waitAndPrintOutput(logger)
+                        //runProot("dpkg-reconfigure --help", root=true).waitAndPrintOutput(logger)
+
+                        return@withContext
+
+                        copyRes(R.raw.run_distro, "run-distro.sh")
+                        runCommand("chmod a+x run-distro.sh", prooted = false).waitAndPrintOutput(logger)
+
+                        runProot("which ls", root=true).waitAndPrintOutput(logger)
+                        runProot("ls -al", root=true).waitAndPrintOutput(logger)
+                        runProot(
+                            "/usr/share/debconf/frontend --help",
+                            root = true
+                        ).waitAndPrintOutput(logger)
+                        runProot("env", root = true).waitAndPrintOutput(logger)
+                        runProot(
+                            "ls -al /usr/share/debconf/frontend",
+                            root = true
+                        ).waitAndPrintOutput(logger)
+                        runProot(
+                            "which useradd",
+                            root = true
+                        ).waitAndPrintOutput(logger)
+                    }
+
+                        //return@withContext
+
+                        klipperHandlerRepository.beginInstallation()
+
+                        bootstrapRepository.apply {
+                            copyRes(R.raw.run_distro, "run-distro.sh")
+                            runCommand(
+                                "chmod a+x run-distro.sh",
+                                prooted = false
+                            ).waitAndPrintOutput(logger)
+                            bootstrapRepository.runProot(
+                                "cd kiauh; bash ./install_klipper.sh",
+                                root = false
+                            ).waitAndPrintOutput(logger)
+                            bootstrapRepository.runProot(
+                                "cd kiauh; bash ./install_moonraker.sh",
+                                root = false
+                            ).waitAndPrintOutput(logger)
+                            bootstrapRepository.runProot(
+                                "cd kiauh; bash ./install_mainsail.sh",
+                                root = false
+                            ).waitAndPrintOutput(logger)
+                        }
+                }
             }
         }
 
