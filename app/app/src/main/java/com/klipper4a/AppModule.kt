@@ -35,7 +35,8 @@ val appModule = module {
 
     factory { MainPreferences(androidContext()) }
     factory <GithubRepository> { GithubRepositoryImpl(get()) }
-    factory<BootstrapRepository> { BootstrapRepositoryImpl(get(), get(), androidContext()) }
+    factory <LinuxContainersRepository> { LinuxContainersRepositoryImpl(get()) }
+    factory<BootstrapRepository> { BootstrapRepositoryImpl(get(), get(), get(), androidContext()) }
 
     single<FIFOEventRepository> { FIFOEventRepositoryImpl(get()) }
     single<VirtualSerialDriver> { VirtualSerialDriver(androidContext(), get(), get(), get()) }

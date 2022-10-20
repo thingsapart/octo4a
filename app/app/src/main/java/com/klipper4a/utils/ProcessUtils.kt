@@ -15,7 +15,9 @@ fun Process.waitAndPrintOutput(logger: LoggerRepository, type: LogType = LogType
         logger.log(this, type) { it }
         outputStr += it
     }
+
     waitFor()
+
     return outputStr
 }
 

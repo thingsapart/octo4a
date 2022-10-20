@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
-import org.koin.java.KoinJavaComponent.inject
 import java.io.*
 import java.net.URL
 import java.util.zip.ZipInputStream
@@ -25,6 +24,7 @@ interface BootstrapRepository {
     fun runCommand(command: String, prooted: Boolean = true, root: Boolean = true, bash: Boolean = false): Process
     fun runProot(command: String, root: Boolean): Process
     fun copyResToBootstrap(resId: Int, destinationRelativePath: String)
+    fun copyResToHome(resId: Int, destinationRelativePath: String)
     fun copyRes(resId: Int, destinationRelativePath: String)
     fun ensureHomeDirectory()
     fun resetSSHPassword(newPassword: String)
@@ -33,14 +33,17 @@ interface BootstrapRepository {
     val isArgonFixApplied: Boolean
 }
 
-class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val githubRepository: GithubRepository, val context: Context) : BootstrapRepository {
+class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val githubRepository: GithubRepository, private val linuxContainersRepository: LinuxContainersRepository, val context: Context) : BootstrapRepository {
     companion object {
         private val FILES_PATH = "/data/data/com.klipper4a/files"
         val PREFIX_PATH = "$FILES_PATH/bootstrap"
-        val HOME_PATH = "$FILES_PATH/home"
-        const val DISTRO_NAME = "ubuntu"
+        const val DISTRO_NAME = "debian"
+        const val DISTRO_RELEASE = "bookworm"
+        //const val DISTRO_NAME = "ubuntu"
+        //const val DISTRO_RELEASE = "jammy"
     }
-    private val filesPath: String by lazy { context.getExternalFilesDir(null).absolutePath }
+    //private val filesPath: String by lazy { context.getExternalFilesDir(null).absolutePath }
+    private val filesPath: String by lazy { "$FILES_PATH/bootstrap/bootstrap/" }
     private var _commandsFlow = MutableSharedFlow<String>(100)
     override val commandsFlow: SharedFlow<String>
         get() = _commandsFlow
@@ -87,7 +90,12 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
     }
 
     override fun copyResToBootstrap(resId: Int, destinationRelativePath: String) {
-        val out = FileOutputStream(PREFIX_PATH + "/bootstrap" + destinationRelativePath)
+        val out = FileOutputStream("$PREFIX_PATH/bootstrap$destinationRelativePath")
+        transfer(context.resources.openRawResource(resId), out)
+    }
+
+    override fun copyResToHome(resId: Int, destinationRelativePath: String) {
+        val out = FileOutputStream("$filesPath/home/$destinationRelativePath")
         transfer(context.resources.openRawResource(resId), out)
     }
 
@@ -97,6 +105,8 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
     }
 
     override suspend fun setupBootstrap(progress: MutableStateFlow<Int>) {
+        ensureHomeDirectory()
+
         withContext(Dispatchers.IO) {
             val PREFIX_FILE = File(PREFIX_PATH)
             if (PREFIX_FILE.isDirectory) {
@@ -106,8 +116,23 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
             progress.emit(0)
 
             try {
+                logger.log(this) { "Getting bootstrap rootfs and utils..." }
                 val arch = getArchString()
+                /*
                 val asset = getLatestRelease("feelfreelinux/android-linux-bootstrap", arch, "bootstrap")
+                val connection = httpsConnection(asset!!.browserDownloadUrl)
+                val zipInputStream = ZipInputStream(connection.inputStream)
+                 */
+
+                val zipInputStream = ZipInputStream(context.getResources().openRawResource(
+                    when (arch) {
+                        "aarch64" -> R.raw.bootstrap_aarch64
+                        "armv7a" -> R.raw.bootstrap_armv7a
+                        "i686" -> R.raw.bootstrap_i686
+                        "x86_64" -> R.raw.bootstrap_x86_64
+                        else -> -1
+                    }
+                ))
 
                 val STAGING_PREFIX_PATH = "${FILES_PATH}/bootstrap-staging"
                 val STAGING_PREFIX_FILE = File(STAGING_PREFIX_PATH)
@@ -118,10 +143,7 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
 
                 val buffer = ByteArray(8096)
                 val symlinks = ArrayList<Pair<String, String>>(50)
-
-                val connection = httpsConnection(asset!!.browserDownloadUrl)
-
-                ZipInputStream(connection.inputStream).use { zipInput ->
+                zipInputStream.use { zipInput ->
                     var zipEntry = zipInput.nextEntry
                     while (zipEntry != null) {
 
@@ -148,44 +170,115 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                     throw RuntimeException("Unable to rename staging folder")
                 }
 
+                // Stage 0: Alpine Pre-Bootstrap.
+                runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
+
+                // Stage 1: Install full distro.
+                copyRes(R.raw.install_full, "bootstrap/install-full.sh")
+                runCommand("chmod a+x bootstrap/install-full.sh", prooted = false).waitAndPrintOutput(logger)
+
+                logger.log(this) { "Getting rootfs images..." }
+                val distroAsset = linuxContainersRepository.getNewest(DISTRO_NAME, arch, DISTRO_RELEASE)
+                if (distroAsset != null) {
+                    logger.log(this) { "Found: ${distroAsset.distro} ${distroAsset.arch} ${distroAsset.release}: ${distroAsset.downloadPath}" }
+                } else {
+                    logger.log(this) { "No suitable distro found!" }
+                    return@withContext
+                }
+
+                progress.emit(5)
+
+                logger.log(this) { "Downloading $DISTRO_NAME $DISTRO_RELEASE $arch distro..." }
+                runCommand("sh /install-full.sh '${distroAsset!!.downloadPath}'").waitAndPrintOutput(logger)
+                runCommand("cd ${PREFIX_PATH}; mv bootstrap/full-distro . && mv bootstrap bootstrap-min && mv full-distro bootstrap", prooted = false).waitAndPrintOutput(logger)
+
                 copyRes(R.raw.run_bootstrap, "run-distro.sh")
                 runCommand("chmod a+x run-distro.sh", prooted = false).waitAndPrintOutput(logger)
 
+                // Stage 2: Set up and install packages.
                 logger.log(this) { "Bootstrap extracted, setting it up..." }
                 runCommand("ls", prooted = false).waitAndPrintOutput(logger)
                 runCommand("chmod -R 700 .", prooted = false).waitAndPrintOutput(logger)
                 if (shouldUsePre5Bootstrap()) {
                     runCommand("rm -r root && mv root-pre5 root", prooted = false).waitAndPrintOutput(logger)
                 }
-                progress.emit(5)
 
+                /*
+                runCommand("mv $PREFIX_PATH/root/bin/proot $PREFIX_PATH/root/bin/proot.org", prooted = false).waitAndPrintOutput(logger)
+                when (arch) {
+                    "aarch64" -> copyRes(R.raw.proot_aarch64, "/root/bin/proot")
+                    "armv7a" -> copyRes(R.raw.proot_armv7a, "/root/bin/proot")
+                    "i686" -> copyRes(R.raw.proot_i686, "/root/bin/proot")
+                    "x86_64" -> copyRes(R.raw.proot_x86_64, "/root/bin/proot")
+                    else -> logger.log { "WARNING: No updated proot for $arch found" }
+                }
+                runCommand("chmod a+x $PREFIX_PATH/root/bin/proot", prooted = false).waitAndPrintOutput(logger)
+                */
+
+                // Termux-Proot-Distro
+                /*
                 logger.log(this) { "Downloading $DISTRO_NAME distro..." }
+                val distroAsset = getLatestRelease("termux/proot-distro", arch, DISTRO_NAME)
+                val distroConnection = httpsConnection(distroAsset!!.browserDownloadUrl)
+                runCommand("mv rootfs.tar.xz rootfs.tar.xz.org", prooted = false).waitAndPrintOutput(logger)
+                transfer(distroConnection.inputStream, FileOutputStream(PREFIX_PATH + "/rootfs.tar.xz"))
+                */
 
+                /*
+                // LinuxContainers
+                logger.log(this) { "Getting rootfs images..." }
+                val distroAsset = linuxContainersRepository.getNewest(DISTRO_NAME, arch, DISTRO_RELEASE)
+                if (distroAsset != null) {
+                    logger.log(this) { "Found: ${distroAsset.distro} ${distroAsset.arch} ${distroAsset.release}: ${distroAsset.downloadPath}" }
+                } else {
+                    logger.log(this) { "No suitable distro found!" }
+                    return@withContext
+                }
+
+                val distroConnection = httpsConnection(distroAsset!!.downloadPath)
+                runCommand("mv rootfs.tar.xz rootfs.tar.xz.org", prooted = false).waitAndPrintOutput(logger)
+                transfer(distroConnection.inputStream, FileOutputStream("$PREFIX_PATH/rootfs.tar.xz"))
+                logger.log(this) { "Downloaded." }
+
+                progress.emit(10)
+
+                runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
+                runCommand("cat /etc/lsb-release").waitAndPrintOutput(logger)
+                logger.log(this) { "Installed $DISTRO_NAME $DISTRO_RELEASE $arch bootstrap. Configuring..." }
+                */
+
+                progress.emit(15)
+
+                // Install some dependencies.
+                runCommand("apt-get update --allow-releaseinfo-change").waitAndPrintOutput(logger)
+                runCommand("cat /etc/resolv.conf; traceroute google.com").waitAndPrintOutput(logger)
+
+                Thread.sleep(10_000)
+
+                runCommand("apt-get install -q -y adduser dropbear curl bash sudo git unzip inetutils-traceroute 2>&1").waitAndPrintOutput(logger)
+                runCommand("cat /etc/resolv.conf; traceroute google.com").waitAndPrintOutput(logger)
+
+                Thread.sleep(10_000)
+
+                // python3-virtualenv doesn't seem to work well in (this?) proot - we're supplying our own hacky shim later.
+
+                // Update PROOT.
                 // Not built for Android -- try this https://github.com/green-green-avk/build-proot-android/raw/master/packages/proot-android-${arch}.tar.gz
                 // val prootAsset = getLatestRelease("proot-me/proot", arch, "proot")
                 // val prootConnection = httpsConnection(prootAsset!!.browserDownloadUrl)
                 // runCommand("mv $PREFIX_PATH/root/bin/proot $PREFIX_PATH/root/bin/proot.org", prooted = false).waitAndPrintOutput(logger)
                 // transfer(prootConnection.inputStream, FileOutputStream(PREFIX_PATH + "/root/bin/proot"))
                 // runCommand("chmod a+x $PREFIX_PATH/root/bin/proot", prooted = false).waitAndPrintOutput(logger)
-
-                logger.log(this) { "Downloading $DISTRO_NAME distro..." }
-                val distroAsset = getLatestRelease("termux/proot-distro", arch, DISTRO_NAME)
-                val distroConnection = httpsConnection(distroAsset!!.browserDownloadUrl)
-                runCommand("mv rootfs.tar.xz rootfs.tar.xz.org", prooted = false).waitAndPrintOutput(logger)
-                transfer(distroConnection.inputStream, FileOutputStream(PREFIX_PATH + "/rootfs.tar.xz"))
-
-                progress.emit(15)
-
-                runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
-                runCommand("cat /etc/lsb-release").waitAndPrintOutput(logger)
-                logger.log(this) { "Installed $DISTRO_NAME bootstrap. Configuring..." }
-
-                // Install some dependencies.
-                runCommand("apt-get update --allow-releaseinfo-change").waitAndPrintOutput(logger)
-                runCommand("apt-get install -q -y dropbear curl bash sudo python3 python3-virtualenv virtualenv git unzip 2>&1").waitAndPrintOutput(logger)
-                // python3-virtualenv doesn't seem to work well in (this?) proot - we're supplying our own hacky shim later.
+                //copyResToBootstrap(R.raw.update_proot, "/update-proot.sh")
+                //runCommand("chmod a+x /update-proot.sh").waitAndPrintOutput(logger)
+                //runCommand("/update-proot.sh 'https://github.com/green-green-avk/build-proot-android/raw/master/packages/proot-android-${arch}.tar.gz'").waitAndPrintOutput(logger)
+                //runCommand("mkdir $PREFIX_PATH/root/org; mv $PREFIX_PATH/root/* $PREFIX_PATH/root/org", prooted = false).waitAndPrintOutput(logger)
+                //runCommand("cp -r $PREFIX_PATH/bootstrap/proot/root/* $PREFIX_PATH/root", prooted = false).waitAndPrintOutput(logger)
 
                 progress.emit(20)
+
+                // Pre-install some Klipper required packages.
+                runCommand("apt-get install -q -y python3 python3-virtualenv virtualenv python3-dev libffi-dev build-essential libncurses-dev libusb-dev avrdude gcc-avr binutils-avr avr-libc stm32flash libnewlib-arm-none-eabi gcc-arm-none-eabi binutils-arm-none-eabi libusb-1.0 pkg-config dfu-util 2>&1").waitAndPrintOutput(logger)
 
                 // Setup docker-systemctl-replacement systemctl simulation.
                 runCommand("mv /bin/systemctl /bin/systemctl.org").waitAndPrintOutput(logger)
@@ -260,7 +353,7 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         pb.environment()["TERM"] = "linux"
         pb.environment()["LANG"] = "'en_US.UTF-8'"
         pb.environment()["PWD"] = "$FILES/bootstrap"
-        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
+        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}/home:/home -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
         pb.environment()["PATH"] = "/sbin:/system/sbin:/product/bin:/apex/com.android.runtime/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
         pb.directory(File("$FILES/bootstrap"))
         var user = "root"
@@ -289,7 +382,7 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         pb.environment()["TERM"] = "linux"
         pb.environment()["LANG"] = "'en_US.UTF-8'"
         pb.environment()["PWD"] = "$FILES/bootstrap"
-        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
+        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}/home:/home -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
         pb.environment()["PATH"] = "/sbin:/system/sbin:/product/bin:/apex/com.android.runtime/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
         pb.directory(File("$FILES/bootstrap"))
         var user = "root"
@@ -305,18 +398,18 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
     }
 
     override fun ensureHomeDirectory() {
-//        val homeFile = File(HOME_PATH)
-//        if (!homeFile.exists()) {
-//            homeFile.mkdir()
-//        }
+        var homeFile = File("$filesPath/home")
+        if (!homeFile.exists()) homeFile.mkdir()
+        homeFile = File("$filesPath/home/klipper")
+        if (!homeFile.exists()) homeFile.mkdir()
     }
     override val isSSHConfigured: Boolean
         get() {
-            return File("/data/data/com.klipper4a/files/bootstrap/bootstrap/home/klipper/.ssh_configured").exists()
+            return File("$filesPath/home/klipper/.ssh_configured").exists()
         }
     override val isArgonFixApplied: Boolean
         get() {
-            return File("/data/data/com.octo4a/files/bootstrap/bootstrap/home/octoprint/.argon-fix").exists()
+            return File("$filesPath/home/octoprint/.argon-fix").exists()
         }
 
     override fun resetSSHPassword(newPassword: String) {

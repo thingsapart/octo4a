@@ -122,79 +122,115 @@ class KlipperHandlerRepositoryImpl(
         }
 
     override suspend fun beginInstallation() {
-        withContext(Dispatchers.IO) {
-            if (!bootstrapRepository.isBootstrapInstalled) {
-                logger.log { "No bootstrap detected, proceeding with installation" }
-                _serverState.emit(KlipperServerStatus.InstallingBootstrap)
-                bootstrapRepository.apply {
-                    setupBootstrap(_installationProgress)
+        wakeLock.acquire()
+        try {
+            withContext(Dispatchers.IO) {
+                if (!bootstrapRepository.isBootstrapInstalled) {
+                    logger.log { "No bootstrap detected, proceeding with installation" }
+                    _serverState.emit(KlipperServerStatus.InstallingBootstrap)
+                    bootstrapRepository.apply {
+                        setupBootstrap(_installationProgress)
+                    }
+                    logger.log { "Bootstrap installed" }
+
+                    _serverState.emit(KlipperServerStatus.InstallingKlipper)
+                    bootstrapRepository.apply {
+                        logger.log { "Copying setup script files to bootstrap..." }
+                        runCommand("mkdir scripts", root = false, bash = false).waitAndPrintOutput(
+                            logger
+                        )
+
+                        // Hacky virtualenv shim, just symlinks the system binaries and runs pip as root.
+                        // Virtualenv otherwise fails with permission denied in proot.
+                        runCommand("mv /usr/bin/virtualenv /usr/bin/virtualenv.org").waitAndPrintOutput(
+                            logger
+                        )
+                        copyResToBootstrap(R.raw.virtualenv, "/usr/bin/virtualenv")
+
+                        Thread.sleep(500)
+                        runCommand("chmod a+x /usr/bin/virtualenv").waitAndPrintOutput(logger)
+
+                        // Scripts for calling Kiauh directly without the TUI.
+                        copyResToHome(
+                            R.raw.install_klipper,
+                            "/klipper/scripts/install_klipper.sh"
+                        )
+                        copyResToHome(
+                            R.raw.install_mainsail,
+                            "/klipper/scripts/install_mainsail.sh"
+                        )
+                        copyResToHome(
+                            R.raw.install_moonraker,
+                            "/klipper/scripts/install_moonraker.sh"
+                        )
+                        copyResToHome(R.raw.ld_preload, "/klipper/scripts/ld_preload.sh")
+                        copyResToHome(
+                            R.raw.kiauh_preamble,
+                            "/klipper/scripts/kiauh_preamble.sh"
+                        )
+                        copyResToHome(R.raw.get_kiauh, "/klipper/get_kiauh.sh")
+
+                        Thread.sleep(500)
+                        runProot(
+                            "cd /home/klipper/; chmod a+x get_kiauh.sh",
+                            root = false
+                        ).waitAndPrintOutput(logger)
+
+                        setInstallationProgress(25)
+
+                        runProot("bash ./get_kiauh.sh", root = false).waitAndPrintOutput(logger)
+                        runProot("cd kiauh; ls", root = false).waitAndPrintOutput(logger)
+
+                        setInstallationProgress(35)
+
+                        runProot(
+                            "cd kiauh; echo 'yes' | bash ./install_klipper.sh",
+                            root = false
+                        ).waitAndPrintOutput(logger)
+
+                        setInstallationProgress(70)
+                    }
+
+                    _serverState.emit(KlipperServerStatus.InstallingMoonraker)
+                    bootstrapRepository.apply {
+                        runProot(
+                            "cd kiauh; bash ./install_moonraker.sh",
+                            root = false
+                        ).waitAndPrintOutput(logger)
+
+                        setInstallationProgress(85)
+                    }
+
+                    _serverState.emit(KlipperServerStatus.InstallingMainsail)
+                    bootstrapRepository.apply {
+                        runProot(
+                            "cd kiauh; bash ./install_mainsail.sh",
+                            root = false
+                        ).waitAndPrintOutput(logger)
+
+                        setInstallationProgress(95)
+                    }
+
+                    _serverState.emit(KlipperServerStatus.BootingUp)
+                    vspPty.cancelPtyThread()
+                    Thread.sleep(10)
+                    vspPty.runPtyThread()
+                    startKlipper()
+                    logger.log { "Dependencies installed" }
+
+                    setInstallationProgress(100)
+                } else {
+                    getExtrasStatus()
+                    startKlipper()
+                    if (preferences.enableSSH) {
+                        logger.log { "Enabling ssh" }
+                        startSSH()
+                    }
+                    extensionsRepository.startUpNecessaryExtensions()
                 }
-                logger.log { "Bootstrap installed" }
-
-                _serverState.emit(KlipperServerStatus.InstallingKlipper)
-                bootstrapRepository.apply {
-                    logger.log { "Copying setup script files to bootstrap..." }
-                    runCommand("mkdir scripts", root=false, bash = false).waitAndPrintOutput(logger)
-
-                    // Hacky virtualenv shim, just symlinks the system binaries and runs pip as root.
-                    // Virtualenv otherwise fails with permission denied in proot.
-                    runCommand("mv /usr/bin/virtualenv /usr/bin/virtualenv.org").waitAndPrintOutput(logger)
-                    copyResToBootstrap(R.raw.virtualenv, "/usr/bin/virtualenv")
-                    runCommand("chmod a+x /usr/bin/virtualenv").waitAndPrintOutput(logger)
-
-                    // Scripts for calling Kiauh directly without the TUI.
-                    copyResToBootstrap(R.raw.install_klipper, "/home/klipper/scripts/install_klipper.sh")
-                    copyResToBootstrap(R.raw.install_mainsail, "/home/klipper/scripts/install_mainsail.sh")
-                    copyResToBootstrap(R.raw.install_moonraker, "/home/klipper/scripts/install_moonraker.sh")
-                    copyResToBootstrap(R.raw.ld_preload, "/home/klipper/scripts/ld_preload.sh")
-                    copyResToBootstrap(R.raw.kiauh_preamble, "/home/klipper/scripts/kiauh_preamble.sh")
-                    copyResToBootstrap(R.raw.get_kiauh, "/home/klipper/get_kiauh.sh")
-
-                    runProot("cd /home/klipper/; chmod a+x get_kiauh.sh", root=false).waitAndPrintOutput(logger)
-
-                    setInstallationProgress(25)
-
-                    runProot("bash ./get_kiauh.sh", root=false).waitAndPrintOutput(logger)
-                    runProot("cd kiauh; ls", root=false).waitAndPrintOutput(logger)
-
-                    setInstallationProgress(35)
-
-                    runProot("cd kiauh; echo 'yes' | bash ./install_klipper.sh", root=false).waitAndPrintOutput(logger)
-
-                    setInstallationProgress(70)
-                }
-
-                _serverState.emit(KlipperServerStatus.InstallingMoonraker)
-                bootstrapRepository.apply {
-                    runProot("cd kiauh; bash ./install_moonraker.sh", root=false).waitAndPrintOutput(logger)
-
-                    setInstallationProgress(85)
-                }
-
-                _serverState.emit(KlipperServerStatus.InstallingMainsail)
-                bootstrapRepository.apply {
-                    runProot("cd kiauh; bash ./install_mainsail.sh", root=false).waitAndPrintOutput(logger)
-
-                    setInstallationProgress(95)
-                }
-
-                _serverState.emit(KlipperServerStatus.BootingUp)
-                vspPty.cancelPtyThread()
-                Thread.sleep(10)
-                vspPty.runPtyThread()
-                startKlipper()
-                logger.log { "Dependencies installed" }
-
-                setInstallationProgress(100)
-            } else {
-                getExtrasStatus()
-                startKlipper()
-                if (preferences.enableSSH) {
-                    logger.log { "Enabling ssh" }
-                    startSSH()
-                }
-                extensionsRepository.startUpNecessaryExtensions()
             }
+        } finally {
+            wakeLock.remove()
         }
     }
 
@@ -353,7 +389,7 @@ class KlipperHandlerRepositoryImpl(
 
     private fun stuff() {
         bootstrapRepository.apply {
-            copyResToBootstrap(R.raw.get_kiauh, "/home/klipper/get_kiauh.sh")
+            copyResToHome(R.raw.get_kiauh, "/klipper/get_kiauh.sh")
 
             runCommand(
                 "cd /home/klipper; chown klipper get_kiauh.sh; chmod a+x get_kiauh.sh; chown klipper /home/klipper/scripts/*",
