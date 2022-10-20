@@ -19,6 +19,7 @@ allprojects {
         jcenter()
         maven { url = uri("https://jitpack.io") }
         maven { url = uri("https://maven.pkg.jetbrains.space/public/p/compose/dev") }
+        maven { url = uri("https://mvnrepository.com/artifact/org.apache.commons/commons-compress") }
     }
 }
 

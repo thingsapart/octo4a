@@ -18,6 +18,12 @@ import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocketFactory
 
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream
+import org.apache.commons.compress.utils.IOUtils
+
 interface BootstrapRepository {
     val commandsFlow: SharedFlow<String>
     suspend fun setupBootstrap(progress: MutableStateFlow<Int>)
@@ -104,6 +110,107 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         transfer(context.resources.openRawResource(resId), out)
     }
 
+    private fun unpackZip(zipInputStream: ZipInputStream) {
+        val PREFIX_FILE = File(PREFIX_PATH)
+        val STAGING_PREFIX_PATH = "${FILES_PATH}/bootstrap-staging"
+        val STAGING_PREFIX_FILE = File(STAGING_PREFIX_PATH)
+
+        if (STAGING_PREFIX_FILE.exists()) {
+            deleteFolder(STAGING_PREFIX_FILE)
+        }
+
+        val buffer = ByteArray(8096)
+        val symlinks = ArrayList<Pair<String, String>>(50)
+        zipInputStream.use { zipInput ->
+            var zipEntry = zipInput.nextEntry
+            while (zipEntry != null) {
+
+                val zipEntryName = zipEntry.name
+                val targetFile = File(STAGING_PREFIX_PATH, zipEntryName)
+                val isDirectory = zipEntry.isDirectory
+
+                ensureDirectoryExists(if (isDirectory) targetFile else targetFile.parentFile)
+
+                if (!isDirectory) {
+                    FileOutputStream(targetFile).use { outStream ->
+                        var readBytes = zipInput.read(buffer)
+                        while ((readBytes) != -1) {
+                            outStream.write(buffer, 0, readBytes)
+                            readBytes = zipInput.read(buffer)
+                        }
+                    }
+                }
+                zipEntry = zipInput.nextEntry
+            }
+        }
+
+        if (!STAGING_PREFIX_FILE.renameTo(PREFIX_FILE)) {
+            throw RuntimeException("Unable to rename staging folder")
+        }
+    }
+
+    private fun unpackTar(tarInputStream: TarArchiveInputStream) {
+        val PREFIX_FILE = File("$PREFIX_PATH/bootstrap")
+        val STAGING_PREFIX_PATH = "${FILES_PATH}/bootstrap/bootstrap-staging"
+        val STAGING_PREFIX_FILE = File(STAGING_PREFIX_PATH)
+
+        if (STAGING_PREFIX_FILE.exists()) {
+            deleteFolder(STAGING_PREFIX_FILE)
+        }
+
+        val buffer = ByteArray(8096)
+        val symlinks = ArrayList<Pair<String, String>>(50)
+        tarInputStream.use { tarInput ->
+            var tarEntry = tarInput.nextEntry
+            while (tarEntry != null) {
+
+                val zipEntryName = tarEntry.name
+                val targetFile = File(STAGING_PREFIX_PATH, zipEntryName)
+                val isDirectory = tarEntry.isDirectory
+
+                ensureDirectoryExists(if (isDirectory) targetFile else targetFile.parentFile)
+
+                if (!isDirectory) {
+                    FileOutputStream(targetFile).use { outStream ->
+                        var readBytes = tarInput.read(buffer)
+                        while ((readBytes) != -1) {
+                            outStream.write(buffer, 0, readBytes)
+                            readBytes = tarInput.read(buffer)
+                        }
+                    }
+                }
+                tarEntry = tarInput.nextEntry
+            }
+        }
+
+        if (!STAGING_PREFIX_FILE.renameTo(PREFIX_FILE)) {
+            throw RuntimeException("Unable to rename staging folder")
+        }
+    }
+
+    private suspend fun installPreBootstrap(arch: String, download: Boolean = false) {
+        val zipInputStream =
+                if (download) {
+                    val asset =
+                        getLatestRelease("feelfreelinux/android-linux-bootstrap", arch, "bootstrap")
+                    val connection = httpsConnection(asset!!.browserDownloadUrl)
+                    ZipInputStream(connection.inputStream)
+                } else {
+                    ZipInputStream(
+                        context.getResources().openRawResource(
+                            when (arch) {
+                                "aarch64" -> R.raw.bootstrap_aarch64
+                                "armv7a" -> R.raw.bootstrap_armv7a
+                                "i686" -> R.raw.bootstrap_i686
+                                "x86_64" -> R.raw.bootstrap_x86_64
+                                else -> -1
+                            }
+                        )
+                    )
+                }
+        unpackZip(zipInputStream)
+    }
+
     override suspend fun setupBootstrap(progress: MutableStateFlow<Int>) {
         ensureHomeDirectory()
 
@@ -116,75 +223,36 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
             progress.emit(0)
 
             try {
-                logger.log(this) { "Getting bootstrap rootfs and utils..." }
                 val arch = getArchString()
-                /*
-                val asset = getLatestRelease("feelfreelinux/android-linux-bootstrap", arch, "bootstrap")
-                val connection = httpsConnection(asset!!.browserDownloadUrl)
-                val zipInputStream = ZipInputStream(connection.inputStream)
-                 */
 
-                val zipInputStream = ZipInputStream(context.getResources().openRawResource(
-                    when (arch) {
-                        "aarch64" -> R.raw.bootstrap_aarch64
-                        "armv7a" -> R.raw.bootstrap_armv7a
-                        "i686" -> R.raw.bootstrap_i686
-                        "x86_64" -> R.raw.bootstrap_x86_64
-                        else -> -1
-                    }
-                ))
-
-                val STAGING_PREFIX_PATH = "${FILES_PATH}/bootstrap-staging"
-                val STAGING_PREFIX_FILE = File(STAGING_PREFIX_PATH)
-
-                if (STAGING_PREFIX_FILE.exists()) {
-                    deleteFolder(STAGING_PREFIX_FILE)
-                }
-
-                val buffer = ByteArray(8096)
-                val symlinks = ArrayList<Pair<String, String>>(50)
-                zipInputStream.use { zipInput ->
-                    var zipEntry = zipInput.nextEntry
-                    while (zipEntry != null) {
-
-                        val zipEntryName = zipEntry.name
-                        val targetFile = File(STAGING_PREFIX_PATH, zipEntryName)
-                        val isDirectory = zipEntry.isDirectory
-
-                        ensureDirectoryExists(if (isDirectory) targetFile else targetFile.parentFile)
-
-                        if (!isDirectory) {
-                            FileOutputStream(targetFile).use { outStream ->
-                                var readBytes = zipInput.read(buffer)
-                                while ((readBytes) != -1) {
-                                    outStream.write(buffer, 0, readBytes)
-                                    readBytes = zipInput.read(buffer)
-                                }
-                            }
-                        }
-                        zipEntry = zipInput.nextEntry
-                    }
-                }
-
-                if (!STAGING_PREFIX_FILE.renameTo(PREFIX_FILE)) {
-                    throw RuntimeException("Unable to rename staging folder")
-                }
-
-                // Stage 0: Alpine Pre-Bootstrap.
-                runCommand("chmod -R 700 .", prooted = false).waitAndPrintOutput(logger)
-                runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
-
-                // Stage 1: Install full distro.
-                copyRes(R.raw.install_full, "bootstrap/install-full.sh")
-                runCommand("chmod a+x bootstrap/install-full.sh", prooted = false).waitAndPrintOutput(logger)
-
-                logger.log(this) { "Getting rootfs images..." }
                 val distroAsset = linuxContainersRepository.getNewest(DISTRO_NAME, arch, DISTRO_RELEASE)
                 if (distroAsset != null) {
                     logger.log(this) { "Found: ${distroAsset.distro} ${distroAsset.arch} ${distroAsset.release}: ${distroAsset.downloadPath}" }
                 } else {
                     logger.log(this) { "No suitable distro found!" }
                     return@withContext
+                }
+
+                if (false) {
+                    logger.log(this) { "Getting bootstrap rootfs and utils..." }
+
+                    installPreBootstrap(arch, download = false)
+
+                    // Stage 0: Alpine Pre-Bootstrap.
+                    runCommand("chmod -R 700 .", prooted = false).waitAndPrintOutput(logger)
+                    runCommand(
+                        "sh install-bootstrap.sh",
+                        prooted = false
+                    ).waitAndPrintOutput(logger)
+
+                    logger.log(this) { "Getting rootfs images..." }
+
+                    // Stage 1: Install full distro.
+                    copyRes(R.raw.install_full, "bootstrap/install-full.sh")
+                    runCommand("chmod a+x bootstrap/install-full.sh", prooted = false).waitAndPrintOutput(logger)
+                } else {
+                    val connection = httpsConnection(distroAsset!!.downloadPath)
+                    unpackTar(TarArchiveInputStream(XZCompressorInputStream(connection.inputStream)))
                 }
 
                 progress.emit(5)

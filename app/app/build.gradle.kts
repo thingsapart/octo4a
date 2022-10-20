@@ -128,7 +128,11 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     // Bugsnag bug reporting
-    implementation("com.bugsnag:bugsnag-android:5.12.0")
+    //implementation("com.bugsnag:bugsnag-android:5.12.0")
+
+    // Compressors
+    implementation("org.apache.commons:commons-compress:1.21")
+    implementation("org.tukaani:xz:1.9")
 
     // Test dependencies
     testImplementation("junit:junit:4.13")
