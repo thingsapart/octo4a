@@ -149,7 +149,8 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 }
 
                 copyRes(R.raw.run_bootstrap, "run-distro.sh")
-                runCommand("chmod a+x run-distro.sh", prooted = false).waitAndPrintOutput(logger)
+                copyRes(R.raw.run_bootstrap, "run-bootstrap.sh")
+                runCommand("chmod a+x run-distro.sh run-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
 
                 logger.log(this) { "Bootstrap extracted, setting it up..." }
                 runCommand("ls", prooted = false).waitAndPrintOutput(logger)
@@ -176,13 +177,21 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
 
                 progress.emit(15)
 
+                copyRes(R.raw.install_bootstrap, "install-bootstrap.sh")
+                runCommand("chmod a+x install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
                 runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
                 runCommand("cat /etc/lsb-release").waitAndPrintOutput(logger)
+
+                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger) // sometimes fails, nop if already exists
+                runCommand("whoami", root = false).waitAndPrintOutput(logger)
+
                 logger.log(this) { "Installed $DISTRO_NAME bootstrap. Configuring..." }
 
                 // Install some dependencies.
                 runCommand("apt-get update --allow-releaseinfo-change").waitAndPrintOutput(logger)
-                runCommand("apt-get install -q -y dropbear curl bash sudo python3 python3-virtualenv virtualenv git unzip 2>&1").waitAndPrintOutput(logger)
+                runCommand("apt-get install -q -y dropbear curl bash sudo git unzip 2>&1").waitAndPrintOutput(logger)
+                runCommand("echo 'klipper     ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", root = true, bash = false).waitAndPrintOutput(logger)
+                ///runCommand("apt-get install -q -y dropbear curl bash sudo python3 python3-virtualenv virtualenv git unzip 2>&1").waitAndPrintOutput(logger)
                 // python3-virtualenv doesn't seem to work well in (this?) proot - we're supplying our own hacky shim later.
 
                 progress.emit(20)
@@ -260,15 +269,17 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
         pb.environment()["TERM"] = "linux"
         pb.environment()["LANG"] = "'en_US.UTF-8'"
         pb.environment()["PWD"] = "$FILES/bootstrap"
-        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
+        //pb.environment()["EXTRA_BIND"] = "-b $FILES/bootstrap/root:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
+        pb.environment()["EXTRA_BIND"] = "-b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/usr/lib/ioctlHook.so"
         pb.environment()["PATH"] = "/sbin:/system/sbin:/product/bin:/apex/com.android.runtime/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
         pb.directory(File("$FILES/bootstrap"))
         var user = "root"
         if (!root) user = "klipper"
         if (prooted) {
             // run inside proot
-            val shell = if (bash) "/bin/bash" else "/bin/sh"
-            pb.command("sh", "run-bootstrap.sh", user,  shell, "-c", command)
+            //val shell = if (bash) "/bin/bash" else "/bin/sh"
+            //pb.command("sh", "run-bootstrap.sh", user,  shell, "-c", command)
+            pb.command("sh", "run-bootstrap.sh", user, command)
         } else {
             pb.command("sh", "-c", command)
         }

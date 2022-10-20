@@ -15,7 +15,6 @@ fun Process.waitAndPrintOutput(logger: LoggerRepository, type: LogType = LogType
         logger.log(this, type) { it }
         outputStr += it
     }
-    waitFor()
     return outputStr
 }
 
@@ -25,6 +24,7 @@ fun Process.getOutputAsString(): String {
     while (inputStream.bufferedReader().readLine().also { line = it } != null) {
         log.append(line + "\n")
     }
+    log.append(">>exit\n")
 
     return log.toString()
 }

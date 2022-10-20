@@ -12,6 +12,10 @@
 set -x
 export TERM=linux
 
+# Stop pip from (rightly) assuming it's running on Android.
+export ANDROID_DATA=not_defined
+chmod 700 /etc/dpkg/dpkg.cfg.d
+
 set -e
 clear
 
@@ -61,7 +65,11 @@ function kiauh_update_if_avail() {
   [[ $(kiauh_update_avail) == "true" ]] && kiauh_update
 }
 
-check_euid
+# Allow root.
+# Proot "root" is just a normal user and the current env setup is causing issues with sudo and
+# the likes.
+
+# check_euid
 init_logfile
 set_globals
 

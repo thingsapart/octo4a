@@ -5,7 +5,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 source kiauh_preamble.sh
 
 # Overwrite clone_klipper. Somehow git does not work when called from scripts in proot? Locking?
-function clone_klipperz() {
+function clone_klipper__not_used() {
   local repo=${1} branch=${2}
 
   [[ -z ${repo} ]] && repo="${KLIPPER_REPO}"
@@ -52,3 +52,7 @@ service="${SYSTEMD}/klipper.service"
 ### write single instance service
 sudo rm -f ${service}
 write_klipper_service "" "${cfg}" "${log}" "${printer}" "${uds}" "${service}"
+
+echo "DONE INSTALLING KLIPPER"
+
+exit 0

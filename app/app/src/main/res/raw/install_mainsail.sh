@@ -11,6 +11,8 @@
 
 # Modified to be able to be called without the Kiauh menu system.
 
+echo "INSTALLING MAINSAIL"
+
 set -e
 
 source kiauh_preamble.sh
@@ -66,3 +68,6 @@ function run() {
 }
 
 run
+
+echo "DONE INSTALLING MAINSAIL"
+exit 0

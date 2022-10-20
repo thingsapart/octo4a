@@ -11,6 +11,8 @@
 
 # Modified to be able to be called without the Kiauh menu system.
 
+echo "INSTALLING MOONRAKER"
+
 source kiauh_preamble.sh
 
 function run() {
@@ -65,3 +67,5 @@ function run() {
 
 run
 
+echo "DONE INSTALLING MOONRAKER"
+exit 0
