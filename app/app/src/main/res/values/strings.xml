@@ -1,19 +1,22 @@
 <resources>
-    <string name="app_name">OctoPrint For Android</string>
-    <string name="landing_install">Install OctoPrint</string>
+    <string name="app_name">Klipper For Android</string>
+    <string name="landing_install">Install Klipper</string>
     <string name="landing_no_installation">No existing installation detected</string>
-    <string name="landing_description">This application will install OctoPrint server on your android device. Please
+    <string name="landing_description">This application will install Klipper, Moonraker and Mainsail on your android device. Please
         make sure that you have at least 700mb of storage available. You will also need an OTG cable in order to connect
         your phone to your 3d printer.\n\nThis project is an unofficial product, not affiliated with OctoPrint project.
+        This application is a fork of Octoprint For Android (Octo4A), all credit goes to the original authors (feelfreelinux).
+        See https://github.com/feelfreelinux/octo4a
     </string>
     <string name="installation_step_bootstrap">Installing bootstrap (%1$s)…</string>
-    <string name="installation_step_downloading_octoprint">Downloading OctoPrint (%1$s)…</string>
-    <string name="installation_step_dependencies">Installing dependencies…</string>
-    <string name="installation_step_bootup">Booting OctoPrint for the first time…</string>
+    <string name="installation_step_klipper">Installing Klipper…</string>
+    <string name="installation_step_moonraker">Installing Moonraker…</string>
+    <string name="installation_step_mainsail">Installing Mainsail…</string>
+    <string name="installation_step_bootup">Starting Klipper for the first time…</string>
     <string name="installation_step_done">Installation complete</string>
-    <string name="status_starting">OctoPrint is starting…</string>
-    <string name="status_stopped">OctoPrint is stopped</string>
-    <string name="status_running">OctoPrint is running</string>
+    <string name="status_starting">Klipper is starting…</string>
+    <string name="status_stopped">Klipper is stopped</string>
+    <string name="status_running">Klipper is running</string>
     <string name="status_stopped_start">tap to start the server</string>
     <string name="status_starting_subtitle">this could take a couple of minutes</string>
     <string name="notification_status_running">Server is running</string>
@@ -42,9 +45,9 @@
     <string name="disable_battery_optimization">Disable battery optimization</string>
     <string name="disable_battery_optimization_msg">For stability reasons it is necessary to disable battery optimizations for this app in the system settings</string>
     <string name="legacy_bootstrap">Legacy installation detected</string>
-    <string name="legacy_bootstrap_msg">Upgrading from legacy releases is not supported. Proceeding with installation will delete all existing octoprint data.</string>
+    <string name="legacy_bootstrap_msg">Upgrading from legacy releases is not supported. Proceeding with installation will delete all existing Klipper data.</string>
     <string name="clear_and_install">Clear data</string>
-    <string name="status_shutting_down">OctoPrint is shutting down…</string>
+    <string name="status_shutting_down">Klipper is shutting down…</string>
     <string name="status_shutting_down_subtitle">this could take a couple of seconds</string>
     <string name="api_too_low">Not supported on older phones</string>
     <string name="requesting_usb_permission">Requesting permission to device…</string>

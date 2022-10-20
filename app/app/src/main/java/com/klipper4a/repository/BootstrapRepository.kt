@@ -1,0 +1,269 @@
+package com.klipper4a.repository
+
+import android.content.Context
+import android.content.res.Resources
+import android.os.Build
+import android.util.Pair
+import com.klipper4a.BuildConfig
+import com.klipper4a.R
+import com.klipper4a.utils.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.withContext
+import java.io.*
+import java.net.URL
+import java.util.zip.ZipInputStream
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+
+interface BootstrapRepository {
+    val commandsFlow: SharedFlow<String>
+    suspend fun setupBootstrap()
+    fun runCommand(command: String, prooted: Boolean = true, root: Boolean = true, bash: Boolean = false): Process
+    fun copyResToBootstrap(resId: Int, destinationRelativePath: String)
+    fun ensureHomeDirectory()
+    fun resetSSHPassword(newPassword: String)
+    val isBootstrapInstalled: Boolean
+    val isSSHConfigured: Boolean
+    val isArgonFixApplied: Boolean
+}
+
+class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val githubRepository: GithubRepository, val context: Context) : BootstrapRepository {
+    companion object {
+        private val FILES_PATH = "/data/data/com.klipper4a/files"
+        val PREFIX_PATH = "$FILES_PATH/bootstrap"
+        val HOME_PATH = "$FILES_PATH/home"
+        val DISTRO_NAME = "ubuntu"
+    }
+    val filesPath: String by lazy { context.getExternalFilesDir(null).absolutePath }
+    private var _commandsFlow = MutableSharedFlow<String>(100)
+    override val commandsFlow: SharedFlow<String>
+        get() = _commandsFlow
+
+    private fun shouldUsePre5Bootstrap(): Boolean {
+        if (getArchString() != "arm" && getArchString() != "i686") {
+            return false
+        }
+
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP
+    }
+
+    private suspend fun getLatestRelease(repo: String, arch: String, distro: String): GithubAsset? {
+        val bootstrapReleases = githubRepository.getNewestReleases(repo)
+        val arch = getArchString()
+
+        val release = bootstrapReleases.firstOrNull {
+            it.assets.any { asset -> asset.name.contains(arch) && asset.name.contains(distro) }
+        }
+
+        return release?.assets?.first { asset -> asset.name.contains(arch) && asset.name.contains(distro) }
+    }
+
+    private fun httpsConnection(urlPrefix: String): HttpsURLConnection {
+        val sslcontext = SSLContext.getInstance("TLSv1")
+        sslcontext.init(null, null, null)
+        val noSSLv3Factory: SSLSocketFactory = TLSSocketFactory()
+
+        HttpsURLConnection.setDefaultSSLSocketFactory(noSSLv3Factory)
+        val connection: HttpsURLConnection = URL(urlPrefix).openConnection() as HttpsURLConnection
+        connection.sslSocketFactory = noSSLv3Factory
+
+        return connection
+    }
+
+    private fun transfer(inputStream: InputStream, outputStream: OutputStream) {
+        var bytesRead = -1
+        val buffer = ByteArray(1024)
+        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+            outputStream.write(buffer, 0, bytesRead)
+        }
+        inputStream.close()
+        outputStream.close()
+    }
+
+    override fun copyResToBootstrap(resId: Int, destinationRelativePath: String) {
+        val out = FileOutputStream(PREFIX_PATH + "/bootstrap" + destinationRelativePath)
+        transfer(context.resources.openRawResource(resId), out)
+    }
+
+    override suspend fun setupBootstrap() {
+        withContext(Dispatchers.IO) {
+            val PREFIX_FILE = File(PREFIX_PATH)
+            if (PREFIX_FILE.isDirectory) {
+                return@withContext
+            }
+
+            try {
+                val arch = getArchString()
+                val asset = getLatestRelease("feelfreelinux/android-linux-bootstrap", arch, "bootstrap")
+
+                val STAGING_PREFIX_PATH = "${FILES_PATH}/bootstrap-staging"
+                val STAGING_PREFIX_FILE = File(STAGING_PREFIX_PATH)
+
+                if (STAGING_PREFIX_FILE.exists()) {
+                    deleteFolder(STAGING_PREFIX_FILE)
+                }
+
+                val buffer = ByteArray(8096)
+                val symlinks = ArrayList<Pair<String, String>>(50)
+
+                val connection = httpsConnection(asset!!.browserDownloadUrl)
+
+                ZipInputStream(connection.inputStream).use { zipInput ->
+                    var zipEntry = zipInput.nextEntry
+                    while (zipEntry != null) {
+
+                        val zipEntryName = zipEntry.name
+                        val targetFile = File(STAGING_PREFIX_PATH, zipEntryName)
+                        val isDirectory = zipEntry.isDirectory
+
+                        ensureDirectoryExists(if (isDirectory) targetFile else targetFile.parentFile)
+
+                        if (!isDirectory) {
+                            FileOutputStream(targetFile).use { outStream ->
+                                var readBytes = zipInput.read(buffer)
+                                while ((readBytes) != -1) {
+                                    outStream.write(buffer, 0, readBytes)
+                                    readBytes = zipInput.read(buffer)
+                                }
+                            }
+                        }
+                        zipEntry = zipInput.nextEntry
+                    }
+                }
+
+                if (!STAGING_PREFIX_FILE.renameTo(PREFIX_FILE)) {
+                    throw RuntimeException("Unable to rename staging folder")
+                }
+                logger.log(this) { "Bootstrap extracted, setting it up..." }
+                runCommand("ls", prooted = false).waitAndPrintOutput(logger)
+                runCommand("chmod -R 700 .", prooted = false).waitAndPrintOutput(logger)
+                if (shouldUsePre5Bootstrap()) {
+                    runCommand("rm -r root && mv root-pre5 root", prooted = false).waitAndPrintOutput(logger)
+                }
+
+                logger.log(this) { "Downloading Ubuntu distro..." }
+                val distroAsset = getLatestRelease("termux/proot-distro", arch, "ubuntu")
+                val distroConnection = httpsConnection(distroAsset!!.browserDownloadUrl)
+                runCommand("mv rootfs.tar.xz rootfs.tar.xz.org", prooted = false).waitAndPrintOutput(logger)
+                transfer(distroConnection.inputStream, FileOutputStream(PREFIX_PATH + "/rootfs.tar.xz"))
+
+                runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
+                runCommand("sh add-user.sh klipper", prooted = false).waitAndPrintOutput(logger)
+                runCommand("cat /etc/lsb-release").waitAndPrintOutput(logger)
+                logger.log(this) { "Installed Ubuntu bootstrap. Configuring..." }
+
+                // Setup ssh
+                runCommand("apt-get update", bash = false).waitAndPrintOutput(logger)
+                runCommand("apt-get install -q -y dropbear curl bash sudo python3 git 2>&1", bash = false).waitAndPrintOutput(logger)
+
+                // Setup docker-systemctl-replacement systemctl simulation
+                runCommand("mv /bin/systemctl /bin/systemctl.org").waitAndPrintOutput(logger)
+                copyResToBootstrap(R.raw.systemctl3, "/bin/systemctl")
+                runCommand("chmod a+x /bin/systemctl").waitAndPrintOutput(logger)
+
+                runCommand("echo \"PermitRootLogin yes\" >> /etc/ssh/sshd_config").waitAndPrintOutput(logger)
+                runCommand("echo 'Port 8022' >> /etc/ssh/sshd_config", bash = false).waitAndPrintOutput(logger)
+                runCommand("ssh-keygen -A 2>&1").waitAndPrintOutput(logger)
+                runCommand("echo 'klipper     ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", bash = false).waitAndPrintOutput(logger)
+
+
+                // Turn ssh on for easier debug
+                if (BuildConfig.DEBUG) {
+//                    runCommand("passwd").setPassword("klipper")
+//                    runCommand("passwd klipper").setPassword("klipper")
+//                    runCommand("/usr/sbin/sshd -p 2137")
+                }
+
+                logger.log(this) { "Bootstrap installation done" }
+
+                return@withContext
+            } catch (e: Exception) {
+                throw(e)
+            } finally {
+            }
+        }
+    }
+
+    private fun ensureDirectoryExists(directory: File) {
+        if (!directory.isDirectory && !directory.mkdirs()) {
+            throw RuntimeException("Unable to create directory: " + directory.absolutePath)
+        }
+    }
+
+    /** Delete a folder and all its content or throw. Don't follow symlinks.  */
+    @Throws(IOException::class)
+    fun deleteFolder(fileOrDirectory: File) {
+        if (fileOrDirectory.canonicalPath == fileOrDirectory.absolutePath && fileOrDirectory.isDirectory) {
+            val children = fileOrDirectory.listFiles()
+
+            if (children != null) {
+                for (child in children) {
+                    deleteFolder(child)
+                }
+            }
+        }
+
+        if (!fileOrDirectory.delete()) {
+            throw RuntimeException("Unable to delete " + (if (fileOrDirectory.isDirectory) "directory " else "file ") + fileOrDirectory.absolutePath)
+        }
+    }
+
+    override fun runCommand(command: String, prooted: Boolean, root: Boolean, bash: Boolean): Process {
+        logger.log(this) { "$> ${command}" }
+
+        val FILES = "/data/data/com.klipper4a/files"
+        val directory = File(filesPath)
+        if (!directory.exists()) {
+            directory.mkdirs()
+        }
+        val pb = ProcessBuilder()
+        pb.redirectErrorStream(true)
+        pb.environment()["HOME"] = "$FILES/bootstrap"
+        pb.environment()["LANG"] = "'en_US.UTF-8'"
+        pb.environment()["PWD"] = "$FILES/bootstrap"
+        pb.environment()["EXTRA_BIND"] = "-b ${filesPath}:/root -b /data/data/com.klipper4a/files/serialpipe:/dev/ttyOcto4a -b /data/data/com.klipper4a/files/bootstrap/ioctlHook.so:/home/klipper/ioctlHook.so"
+        pb.environment()["PATH"] = "/sbin:/system/sbin:/product/bin:/apex/com.android.runtime/bin:/system/bin:/system/xbin:/odm/bin:/vendor/bin:/vendor/xbin"
+        pb.directory(File("$FILES/bootstrap"))
+        var user = "root"
+        if (!root) user = "klipper"
+        if (prooted) {
+            // run inside proot
+            val shell = if (bash) "/bin/bash" else "/bin/sh"
+            pb.command("sh", "run-bootstrap.sh", user,  shell, "-c", command)
+        } else {
+            pb.command("sh", "-c", command)
+        }
+        return pb.start()
+    }
+
+    override fun ensureHomeDirectory() {
+//        val homeFile = File(HOME_PATH)
+//        if (!homeFile.exists()) {
+//            homeFile.mkdir()
+//        }
+    }
+    override val isSSHConfigured: Boolean
+        get() {
+            return File("/data/data/com.klipper4a/files/bootstrap/bootstrap/home/klipper/.ssh_configured").exists()
+        }
+    override val isArgonFixApplied: Boolean
+        get() {
+            return File("/data/data/com.octo4a/files/bootstrap/bootstrap/home/octoprint/.argon-fix").exists()
+        }
+
+    override fun resetSSHPassword(newPassword: String) {
+        logger.log(this) { "Deleting password just in case" }
+        runCommand("passwd -d klipper").waitAndPrintOutput(logger)
+        runCommand("passwd klipper").setPassword(newPassword)
+        runCommand("passwd -d root").waitAndPrintOutput(logger)
+        runCommand("passwd root").setPassword(newPassword)
+        runCommand("touch .ssh_configured", root = false)
+        runCommand("touch .ssh_configured", root = true)
+    }
+
+    override val isBootstrapInstalled: Boolean
+        get() = File("$FILES_PATH/bootstrap/bootstrap").exists()
+}

@@ -20,18 +20,18 @@
             android:padding="16dp"/>
 
     <TextView
-            android:id="@+id/progressTextView"
-            android:text="0%"
-            android:paddingTop="22dp"
-            android:textColor="@android:color/white"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:textSize="62sp"
-            android:textStyle="bold"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"/>
+        android:id="@+id/progressTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:paddingTop="22dp"
+        android:text="0%"
+        android:textColor="#597FA5"
+        android:textSize="62sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
     <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardView"
             android:layout_width="match_parent"
@@ -47,6 +47,7 @@
                 android:orientation="vertical"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content">
+
             <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -64,27 +65,35 @@
                     android:fontFamily="sans-serif-light"
                     android:textColor="@android:color/black"
                     android:text="This might take a while depending on your network connection (Up to 30 minutes)"/>
-            <com.octo4a.ui.views.InstallationProgressItem
+
+            <com.klipper4a.ui.views.InstallationProgressItem
                     android:id="@+id/bootstrapItem"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"/>
-            <com.octo4a.ui.views.InstallationProgressItem
-                    android:id="@+id/downloadingOctoprintItem"
+            <com.klipper4a.ui.views.InstallationProgressItem
+                    android:id="@+id/installngKlipperItem"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"/>
-            <com.octo4a.ui.views.InstallationProgressItem
-                    android:id="@+id/installingDependenciesItem"
+            <com.klipper4a.ui.views.InstallationProgressItem
+                    android:id="@+id/installingMoonrakerItem"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"/>
-            <com.octo4a.ui.views.InstallationProgressItem
-                    android:id="@+id/bootingOctoprintItem"
+
+            <com.klipper4a.ui.views.InstallationProgressItem
+                android:id="@+id/installingMainsailtem"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginBottom="16dp" />
+
+            <com.klipper4a.ui.views.InstallationProgressItem
+                    android:id="@+id/bootingKlipperItem"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="16dp"/>
-            <com.octo4a.ui.views.InstallationProgressItem
+            <com.klipper4a.ui.views.InstallationProgressItem
                     android:id="@+id/installationCompleteItem"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

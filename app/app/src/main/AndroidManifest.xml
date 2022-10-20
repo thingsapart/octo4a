@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
         xmlns:tools="http://schemas.android.com/tools"
-          package="com.octo4a">
+          package="com.klipper4a">
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <uses-permission android:name="android.permission.CAMERA" />
@@ -20,7 +20,7 @@
             tools:overrideLibrary="androidx.camera.view, androidx.camera.extensions, androidx.camera.camera2, androidx.camera.lifecycle, androidx.camera.core"/>
     <application
             android:allowBackup="false"
-            android:name=".Octo4aApplication"
+            android:name="com.klipper4a.Klipper4aApplication"
             android:icon="@mipmap/ic_launcher"
             android:hardwareAccelerated="true"
             android:label="@string/app_name"
@@ -29,7 +29,7 @@
             android:installLocation="internalOnly"
             android:usesCleartextTraffic="true"
             android:theme="@style/AppTheme">
-        <activity android:name=".ui.InitialActivity">
+        <activity android:name="com.klipper4a.ui.InitialActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
@@ -50,25 +50,25 @@
                     android:resource="@xml/device_filter" />
         </activity>
 
-        <activity android:name=".ui.MainActivity">
+        <activity android:name="com.klipper4a.ui.MainActivity">
         </activity>
-        <activity android:name=".ui.WebinterfaceActivity">
+        <activity android:name="com.klipper4a.ui.WebinterfaceActivity">
         </activity>
-        <activity android:name=".ui.InstallationActivity"/>
-        <service android:name=".service.OctoPrintService">
+        <activity android:name="com.klipper4a.ui.InstallationActivity"/>
+        <service android:name="com.klipper4a.service.OctoPrintService">
 
 
         </service>
-        <service android:name=".camera.CameraService" />
-        <service android:name=".camera.LegacyCameraService" />
+        <service android:name="com.klipper4a.camera.CameraService" />
+        <service android:name="com.klipper4a.camera.LegacyCameraService" />
 
         <meta-data android:name="com.sec.android.support.multiwindow" android:value="true" />
         <meta-data android:name="com.samsung.android.multidisplay.keep_process_alive" android:value="true"/>
         <meta-data android:name="com.bugsnag.android.API_KEY"
                    android:value="002d1ae9fff3a791929cce6ad91da47e"/>
         <receiver
-                android:name=".BootReceiver"
-                android:label="Octo4aBootReceiver">
+                android:name="com.klipper4a.BootReceiver"
+                android:label="Klipper4aBootReceiver">
             <intent-filter>
                 <category android:name="android.intent.category.DEFAULT" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

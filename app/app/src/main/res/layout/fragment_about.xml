@@ -19,7 +19,7 @@
                   android:fontFamily="sans-serif"
                   android:textSize="16sp"
                   android:text="octo4a build 0.0.1-test14"/>
-        <com.octo4a.ui.views.StatusView
+        <com.klipper4a.ui.views.StatusView
                 android:layout_width="match_parent"
                 android:layout_margin="8dp"
                 android:id="@+id/appProjectButton"
@@ -30,7 +30,7 @@
                 android:layout_height="wrap_content"/>
         <View style="@style/Divider"
               android:id="@id/dividerView"/>
-        <com.octo4a.ui.views.StatusView
+        <com.klipper4a.ui.views.StatusView
                 android:layout_width="match_parent"
                 android:layout_margin="8dp"
                 android:id="@+id/joinTelegramButton"
@@ -41,7 +41,7 @@
                 android:layout_height="wrap_content"/>
         <View style="@style/Divider"
               android:id="@id/dividerView"/>
-        <com.octo4a.ui.views.StatusView
+        <com.klipper4a.ui.views.StatusView
                 android:layout_width="match_parent"
                 android:layout_margin="8dp"
                 android:id="@+id/donateButton"

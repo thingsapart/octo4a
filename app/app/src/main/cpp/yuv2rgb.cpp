@@ -40,7 +40,7 @@ void yuv420toNv21(int image_width, int image_height, const int8_t* y_buffer,
 
 extern "C" {
 
-jboolean Java_com_octo4a_camera_NativeCameraUtils_yuv420toNv21(
+jboolean Java_com_klipper4a_camera_NativeCameraUtils_yuv420toNv21(
     JNIEnv *env, jclass clazz,
     jint image_width, jint image_height, jobject y_byte_buffer,
     jobject u_byte_buffer, jobject v_byte_buffer, jint y_pixel_stride,

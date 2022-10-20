@@ -161,8 +161,8 @@ extern "C"
     openpty(&master, &slave, name, nullptr, nullptr);
     __android_log_print(ANDROID_LOG_VERBOSE, "TAG", "PtyThread called openpty");
 
-    unlink("/data/data/com.octo4a/files/serialpipe");
-    symlink(name, "/data/data/com.octo4a/files/serialpipe");
+    unlink("/data/data/com.klipper4a/files/serialpipe");
+    symlink(name, "/data/data/com.klipper4a/files/serialpipe");
     __android_log_print(ANDROID_LOG_VERBOSE, "TAG", "SYMLIKED");
 
     // Prepare fds
@@ -245,7 +245,7 @@ extern "C"
 extern "C"
 {
 
-    JNIEXPORT void JNICALL Java_com_octo4a_serial_VSPPty_writeData(JNIEnv *env, jobject obj, jbyteArray data)
+    JNIEXPORT void JNICALL Java_com_klipper4a_serial_VSPPty_writeData(JNIEnv *env, jobject obj, jbyteArray data)
     {
         jsize numBytes = env->GetArrayLength(data);
         jbyte *lib = env->GetByteArrayElements(data, 0);
@@ -253,44 +253,44 @@ extern "C"
         //    fflush(master);
     }
 
-    JNIEXPORT jint JNICALL Java_com_octo4a_serial_VSPPty_getBaudrate(JNIEnv *env, jobject obj, jint data)
+    JNIEXPORT jint JNICALL Java_com_klipper4a_serial_VSPPty_getBaudrate(JNIEnv *env, jobject obj, jint data)
     {
         return getBaudrate(data);
     }
 
-    JNIEXPORT void JNICALL Java_com_octo4a_serial_VSPPty_setVSPListener(JNIEnv *env, jobject instance, jobject listener)
+    JNIEXPORT void JNICALL Java_com_klipper4a_serial_VSPPty_setVSPListener(JNIEnv *env, jobject instance, jobject listener)
     {
         env->GetJavaVM(&jvm);
         storedEnv = env;
 
         storeWeakListener = env->NewWeakGlobalRef(listener);
-        serialDataClass = (jclass) env->NewGlobalRef(env->FindClass("com/octo4a/serial/SerialData"));
+        serialDataClass = (jclass) env->NewGlobalRef(env->FindClass("com/klipper4a/serial/SerialData"));
         serialDataConstructor = env->GetMethodID(serialDataClass, "<init>", "([BIIIII)V");
         jclass clazz = env->GetObjectClass(storeWeakListener);
-        stringCallback = env->GetMethodID(clazz, "onDataReceived", "(Lcom/octo4a/serial/SerialData;)V");
+        stringCallback = env->GetMethodID(clazz, "onDataReceived", "(Lcom/klipper4a/serial/SerialData;)V");
 
         __android_log_print(ANDROID_LOG_VERBOSE, "GetEnv:", " Subscribe to Listener  OK \n");
         if (nullptr == stringCallback)
             return;
     }
 
-    JNIEXPORT void JNICALL Java_com_octo4a_serial_VSPPty_runPtyThread(JNIEnv *env, jobject instance)
+    JNIEXPORT void JNICALL Java_com_klipper4a_serial_VSPPty_runPtyThread(JNIEnv *env, jobject instance)
     {
         if (ptyThreadHandle == 0) {
             pthread_create(&ptyThreadHandle, nullptr, &ptyThread, nullptr);
         }
     }
 
-    JNIEXPORT void JNICALL Java_com_octo4a_serial_VSPPty_cancelPtyThread(JNIEnv *env, jobject instance)
+    JNIEXPORT void JNICALL Java_com_klipper4a_serial_VSPPty_cancelPtyThread(JNIEnv *env, jobject instance)
     {
         if (ptyThreadHandle != 0) {
             pthread_kill(ptyThreadHandle, 15);
         }
     }
 
-    JNIEXPORT void JNICALL Java_com_octo4a_serial_VSPPty_createEventPipe(JNIEnv *env, jobject instance)
+    JNIEXPORT void JNICALL Java_com_klipper4a_serial_VSPPty_createEventPipe(JNIEnv *env, jobject instance)
     {
-        int res = mkfifo("/data/data/com.octo4a/files/bootstrap/bootstrap/eventPipe", S_IRWXO | S_IRWXU);
+        int res = mkfifo("/data/data/com.klipper4a/files/bootstrap/bootstrap/eventPipe", S_IRWXO | S_IRWXU);
         if (res != 0)
         {
             __android_log_print(ANDROID_LOG_VERBOSE, "MkFifo:", " Can't create event pipe\n");
