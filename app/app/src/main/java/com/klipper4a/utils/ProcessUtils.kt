@@ -1,6 +1,5 @@
 package com.klipper4a.utils
 
-import com.bugsnag.android.Bugsnag
 import com.klipper4a.repository.LogType
 import com.klipper4a.repository.LoggerRepository
 import kotlinx.coroutines.CoroutineScope

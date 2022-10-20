@@ -230,7 +230,7 @@ class KlipperHandlerRepositoryImpl(
                 }
             }
         } finally {
-            wakeLock.remove()
+            //wakeLock.remove()
         }
     }
 

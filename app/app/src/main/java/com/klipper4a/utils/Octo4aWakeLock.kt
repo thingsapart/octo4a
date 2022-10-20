@@ -49,8 +49,12 @@ class Octo4aWakeLock(val context: Context, val logger: LoggerRepository) {
     }
 
     fun remove() {
-        wakeLock?.release()
-        wifiLock?.release()
+        if (wakeLock != null) {
+            if (wakeLock!!.isHeld) wakeLock?.release()
+        }
+        if (wifiLock != null) {
+            if (wifiLock!!.isHeld) wifiLock?.release()
+        }
         wakeLock = null
         wifiLock = null
     }

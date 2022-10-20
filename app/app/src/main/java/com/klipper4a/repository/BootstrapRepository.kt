@@ -37,10 +37,10 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
     companion object {
         private val FILES_PATH = "/data/data/com.klipper4a/files"
         val PREFIX_PATH = "$FILES_PATH/bootstrap"
-        const val DISTRO_NAME = "debian"
-        const val DISTRO_RELEASE = "bookworm"
-        //const val DISTRO_NAME = "ubuntu"
-        //const val DISTRO_RELEASE = "jammy"
+        //const val DISTRO_NAME = "debian"
+        //const val DISTRO_RELEASE = "bookworm"
+        const val DISTRO_NAME = "ubuntu"
+        const val DISTRO_RELEASE = "jammy"
     }
     //private val filesPath: String by lazy { context.getExternalFilesDir(null).absolutePath }
     private val filesPath: String by lazy { "$FILES_PATH/bootstrap/bootstrap/" }
@@ -171,6 +171,7 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 }
 
                 // Stage 0: Alpine Pre-Bootstrap.
+                runCommand("chmod -R 700 .", prooted = false).waitAndPrintOutput(logger)
                 runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
 
                 // Stage 1: Install full distro.
@@ -198,7 +199,6 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 // Stage 2: Set up and install packages.
                 logger.log(this) { "Bootstrap extracted, setting it up..." }
                 runCommand("ls", prooted = false).waitAndPrintOutput(logger)
-                runCommand("chmod -R 700 .", prooted = false).waitAndPrintOutput(logger)
                 if (shouldUsePre5Bootstrap()) {
                     runCommand("rm -r root && mv root-pre5 root", prooted = false).waitAndPrintOutput(logger)
                 }
@@ -250,15 +250,18 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 progress.emit(15)
 
                 // Install some dependencies.
+                copyResToBootstrap(R.raw.nop, "/usr/bin/nop.sh")
+                runCommand("chmod a+x /usr/bin/nop.sh; ln -s /usr/bin/nop.sh /usr/bin/update-rc.d; ln -s /usr/bin/nop.sh /usr/bin/deb-systemd-helper; ln -s /usr/bin/nop.sh pkg-config-dpkghook").waitAndPrintOutput(logger)
+
                 runCommand("apt-get update --allow-releaseinfo-change").waitAndPrintOutput(logger)
-                runCommand("cat /etc/resolv.conf; traceroute google.com").waitAndPrintOutput(logger)
+                runCommand("apt-get install -q -y --reinstall adduser").waitAndPrintOutput(logger)
+                runCommand("cat /etc/resolv.conf").waitAndPrintOutput(logger)
+                Thread.sleep(5_000)
 
-                Thread.sleep(10_000)
+                runCommand("apt-get install -q -y dropbear curl bash sudo git unzip inetutils-traceroute 2>&1").waitAndPrintOutput(logger)
+                Thread.sleep(5_000)
 
-                runCommand("apt-get install -q -y adduser dropbear curl bash sudo git unzip inetutils-traceroute 2>&1").waitAndPrintOutput(logger)
-                runCommand("cat /etc/resolv.conf; traceroute google.com").waitAndPrintOutput(logger)
-
-                Thread.sleep(10_000)
+                val sshdProcess = runCommand("/usr/sbin/dropbear -p 8022", bash = false)
 
                 // python3-virtualenv doesn't seem to work well in (this?) proot - we're supplying our own hacky shim later.
 
@@ -277,8 +280,7 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
 
                 progress.emit(20)
 
-                // Pre-install some Klipper required packages.
-                runCommand("apt-get install -q -y python3 python3-virtualenv virtualenv python3-dev libffi-dev build-essential libncurses-dev libusb-dev avrdude gcc-avr binutils-avr avr-libc stm32flash libnewlib-arm-none-eabi gcc-arm-none-eabi binutils-arm-none-eabi libusb-1.0 pkg-config dfu-util 2>&1").waitAndPrintOutput(logger)
+                runCommand("echo 'ADDUSER:'; which adduser").waitAndPrintOutput(logger)
 
                 // Setup docker-systemctl-replacement systemctl simulation.
                 runCommand("mv /bin/systemctl /bin/systemctl.org").waitAndPrintOutput(logger)
@@ -290,11 +292,13 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
 
                 // Add klipper user.
                 //runCommand("sh add-user.sh klipper", prooted = false).waitAndPrintOutput(logger)
-                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger)
-                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger) // sometimes fails, nop if already exists
+                runCommand("mkdir /home/klipper; useradd -U -m -d /home/klipper klipper").waitAndPrintOutput(logger)
                 runCommand("echo 'klipper     ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", root = true, bash = false).waitAndPrintOutput(logger)
                 runCommand("passwd").setPassword("klipper")
                 runCommand("passwd klipper").setPassword("klipper")
+
+                // Pre-install some Klipper required packages.
+                runCommand("apt-get install -q -y python3 python3-virtualenv virtualenv python3-dev libffi-dev build-essential libncurses-dev libusb-dev avrdude gcc-avr binutils-avr avr-libc stm32flash libnewlib-arm-none-eabi gcc-arm-none-eabi binutils-arm-none-eabi libusb-1.0 pkg-config dfu-util 2>&1").waitAndPrintOutput(logger)
 
                 // Turn ssh on for easier debug
                 if (BuildConfig.DEBUG) {
@@ -306,6 +310,8 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 logger.log(this) { "Bootstrap installation done" }
 
                 progress.emit(35)
+
+                sshdProcess.destroy()
 
                 return@withContext
             } catch (e: Exception) {

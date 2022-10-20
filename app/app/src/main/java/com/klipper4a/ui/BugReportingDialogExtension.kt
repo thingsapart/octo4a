@@ -7,6 +7,10 @@ import com.klipper4a.R
 import com.klipper4a.utils.preferences.MainPreferences
 
 fun Activity.showBugReportingDialog(prefs: MainPreferences) {
+    prefs.enableBugReporting = false
+    return
+
+    /*
     if (!prefs.hasAskedAboutReporting) {
         val builder = AlertDialog.Builder(this)
         builder.apply {
@@ -25,4 +29,5 @@ fun Activity.showBugReportingDialog(prefs: MainPreferences) {
         val dialog = builder.create()
         dialog.show()
     }
+    */
 }

@@ -65,3 +65,4 @@ function run() {
 
 run
 
+echo "DONE"
