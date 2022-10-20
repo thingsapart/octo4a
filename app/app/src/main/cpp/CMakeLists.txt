@@ -1,4 +1,4 @@
-project(Octo4a)
+project(Klipper4a)
 cmake_minimum_required(VERSION 3.4.1)
 
 add_library(vsp-pty SHARED

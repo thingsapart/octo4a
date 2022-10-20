@@ -41,7 +41,7 @@
 
     </com.google.android.material.card.MaterialCardView>
 
-    <com.octo4a.ui.views.StatusView
+    <com.klipper4a.ui.views.StatusView
             android:layout_width="match_parent"
             android:layout_margin="8dp"
             android:id="@+id/serverStatus"
@@ -52,7 +52,7 @@
             android:layout_height="wrap_content"/>
     <View style="@style/Divider"
           android:id="@id/dividerView"/>
-    <com.octo4a.ui.views.StatusView
+    <com.klipper4a.ui.views.StatusView
             android:layout_width="match_parent"
             android:layout_margin="8dp"
             android:id="@+id/connectionStatus"
@@ -66,7 +66,7 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                       android:id="@+id/usbDevicesList" android:orientation="vertical"/>
 
-    <com.octo4a.ui.views.StatusView
+    <com.klipper4a.ui.views.StatusView
             android:layout_width="match_parent"
             android:layout_margin="8dp"
             android:id="@+id/camServerStatus"

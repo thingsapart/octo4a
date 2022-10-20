@@ -10,7 +10,7 @@ android {
     compileSdk = 28
     buildToolsVersion = "30.0.3"
     defaultConfig {
-        applicationId = "com.octo4a"
+        applicationId = "com.klipper4a"
         minSdk = 17
         targetSdk = 28
         versionName = "1.1.2"

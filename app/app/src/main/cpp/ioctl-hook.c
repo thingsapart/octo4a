@@ -22,7 +22,7 @@ int g_obvio=0;
 #define request_t int
 #define TIOCMBIS 0x5416
 
-static char fifoPath[] = "/home/octoprint/eventPipe";
+static char fifoPath[] = "/home/klipper/eventPipe";
 static char eventJsonStart[] = "{\"eventType\": \"";
 static char eventJsonEnd[] = "\"}\n";
 

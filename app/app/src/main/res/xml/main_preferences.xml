@@ -40,7 +40,7 @@
                 app:key="startOnBoot"
                 app:title="Start on boot"
                 app:defaultValue="false"
-                app:summary="Automatically starts octo4a on boot"/>
+                app:summary="Automatically starts klipper4a on boot"/>
     </PreferenceCategory>
     <PreferenceCategory
             app:title="Camera settings"
