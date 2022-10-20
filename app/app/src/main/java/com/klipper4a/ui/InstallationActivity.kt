@@ -7,7 +7,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.klipper4a.R
 import com.klipper4a.repository.KlipperServerStatus
 import com.klipper4a.service.OctoPrintService
-import com.klipper4a.repository.getInstallationProgress
 import com.klipper4a.ui.fragments.TerminalSheetDialog
 import com.klipper4a.ui.views.InstallationProgressItem
 import com.klipper4a.utils.preferences.MainPreferences
@@ -32,9 +31,13 @@ class InstallationActivity : AppCompatActivity() {
         showBugReportingDialog(MainPreferences(this))
 
         installationViewModel.serverStatus.observe(this) {
-            progressTextView.text = "${it.getInstallationProgress()}%"
+            // progressTextView.text = "${it.getInstallationProgress()}%"
             setItemsState(it)
             continueButton.isEnabled = it == KlipperServerStatus.Running
+        }
+
+        installationViewModel.installationProgress.observe(this) {
+            progressTextView.text = "${it}%"
         }
 
         continueButton.setOnClickListener {

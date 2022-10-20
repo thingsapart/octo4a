@@ -1,25 +1,16 @@
 package com.klipper4a.repository
 
-import android.R.attr.path
-import android.R.attr.start
 import android.content.Context
 import android.os.Environment
-import android.util.Log
-import com.google.gson.JsonParser
 import com.klipper4a.R
 import com.klipper4a.serial.VSPPty
-import com.klipper4a.serial.VirtualSerialDriver
 import com.klipper4a.utils.*
 import com.klipper4a.utils.preferences.MainPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import org.yaml.snakeyaml.Yaml
 import java.io.File
-import java.io.FileWriter
-import java.lang.Exception
 import java.lang.reflect.Field
 import java.util.regex.Matcher
 import java.util.regex.Pattern
@@ -56,11 +47,14 @@ fun KlipperServerStatus.isInstallationFinished(): Boolean {
 
 interface KlipperHandlerRepository {
     val serverState: StateFlow<KlipperServerStatus>
+    val installationProgress: StateFlow<Int>
     val klipperVersion: StateFlow<String>
     val usbDeviceStatus: StateFlow<KlipperUsbDeviceStatus>
     val registeredExtensions: StateFlow<List<RegisteredExtension>>
     val cameraServerStatus: StateFlow<Boolean>
     val extrasStatus: StateFlow<KlipperExtrasStatus>
+
+    suspend fun setInstallationProgress(progress: Int)
 
     suspend fun beginInstallation()
     fun startKlipper()
@@ -101,6 +95,7 @@ class KlipperHandlerRepositoryImpl(
     private val vspPty by lazy { VSPPty() }
 
     private var _serverState = MutableStateFlow(KlipperServerStatus.InstallingBootstrap)
+    private var _installationProgress = MutableStateFlow(0)
     private var _extensionsState = MutableStateFlow(listOf<RegisteredExtension>())
     private var _klipperVersion = MutableStateFlow("...")
     private var _usbDeviceStatus = MutableStateFlow(KlipperUsbDeviceStatus(false))
@@ -113,6 +108,7 @@ class KlipperHandlerRepositoryImpl(
     private var fifoThread: Thread? = null
 
     override val serverState: StateFlow<KlipperServerStatus> = _serverState
+    override val installationProgress: StateFlow<Int> = _installationProgress
     override val registeredExtensions: StateFlow<List<RegisteredExtension>> = _extensionsState
     override val klipperVersion: StateFlow<String> = _klipperVersion
     override val usbDeviceStatus: StateFlow<KlipperUsbDeviceStatus> = _usbDeviceStatus
@@ -131,7 +127,7 @@ class KlipperHandlerRepositoryImpl(
                 logger.log { "No bootstrap detected, proceeding with installation" }
                 _serverState.emit(KlipperServerStatus.InstallingBootstrap)
                 bootstrapRepository.apply {
-                    setupBootstrap()
+                    setupBootstrap(_installationProgress)
                 }
                 logger.log { "Bootstrap installed" }
 
@@ -140,6 +136,13 @@ class KlipperHandlerRepositoryImpl(
                     logger.log { "Copying setup script files to bootstrap..." }
                     runCommand("mkdir scripts", root=false, bash = false).waitAndPrintOutput(logger)
 
+                    // Hacky virtualenv shim, just symlinks the system binaries and runs pip as root.
+                    // Virtualenv otherwise fails with permission denied in proot.
+                    runCommand("mv /usr/bin/virtualenv /usr/bin/virtualenv.org").waitAndPrintOutput(logger)
+                    copyResToBootstrap(R.raw.virtualenv, "/usr/bin/virtualenv")
+                    runCommand("chmod a+x /usr/bin/virtualenv").waitAndPrintOutput(logger)
+
+                    // Scripts for calling Kiauh directly without the TUI.
                     copyResToBootstrap(R.raw.install_klipper, "/home/klipper/scripts/install_klipper.sh")
                     copyResToBootstrap(R.raw.install_mainsail, "/home/klipper/scripts/install_mainsail.sh")
                     copyResToBootstrap(R.raw.install_moonraker, "/home/klipper/scripts/install_moonraker.sh")
@@ -147,28 +150,32 @@ class KlipperHandlerRepositoryImpl(
                     copyResToBootstrap(R.raw.kiauh_preamble, "/home/klipper/scripts/kiauh_preamble.sh")
                     copyResToBootstrap(R.raw.get_kiauh, "/home/klipper/get_kiauh.sh")
 
-                    runCommand("cd /home/klipper; chown klipper get_kiauh.sh; chmod a+x get_kiauh.sh; chown klipper /home/klipper/scripts/*", bash=false).waitAndPrintOutput(logger)
+                    runProot("cd /home/klipper/; chmod a+x get_kiauh.sh", root=false).waitAndPrintOutput(logger)
 
-                    val gitCmd = runCommand("bash ./get_kiauh.sh", root=false, prooted=true, bash=false)
-                    gitCmd.waitAndPrintOutput(
-                        logger
-                    )
-                    gitCmd.waitFor()
-                    runCommand("ls; pwd; cd bootstrap; pwd; ls; cd bootstrap; pwd; ls; cd home/klipper; ls; pwd", prooted=false, bash = false).waitAndPrintOutput(logger)
-                    runCommand("ls; pwd; cd kiauh; pwd; ls", root=false, bash = false).waitAndPrintOutput(logger)
-                    runCommand("cd kiauh; ls", root=false, bash = false).waitFor()
+                    setInstallationProgress(25)
 
-                    runCommand("cd kiauh; bash ./install_klipper.sh", root=false).waitAndPrintOutput(logger)
+                    runProot("bash ./get_kiauh.sh", root=false).waitAndPrintOutput(logger)
+                    runProot("cd kiauh; ls", root=false).waitAndPrintOutput(logger)
+
+                    setInstallationProgress(35)
+
+                    runProot("cd kiauh; echo 'yes' | bash ./install_klipper.sh", root=false).waitAndPrintOutput(logger)
+
+                    setInstallationProgress(70)
                 }
 
                 _serverState.emit(KlipperServerStatus.InstallingMoonraker)
                 bootstrapRepository.apply {
-                    runCommand("cd kiauh; bash ./install_moonraker.sh", root=false).waitAndPrintOutput(logger)
+                    runProot("cd kiauh; bash ./install_moonraker.sh", root=false).waitAndPrintOutput(logger)
+
+                    setInstallationProgress(85)
                 }
 
                 _serverState.emit(KlipperServerStatus.InstallingMainsail)
                 bootstrapRepository.apply {
-                    runCommand("cd kiauh; bash ./install_mainsail.sh", root=false).waitAndPrintOutput(logger)
+                    runProot("cd kiauh; bash ./install_mainsail.sh", root=false).waitAndPrintOutput(logger)
+
+                    setInstallationProgress(95)
                 }
 
                 _serverState.emit(KlipperServerStatus.BootingUp)
@@ -177,6 +184,8 @@ class KlipperHandlerRepositoryImpl(
                 vspPty.runPtyThread()
                 startKlipper()
                 logger.log { "Dependencies installed" }
+
+                setInstallationProgress(100)
             } else {
                 getExtrasStatus()
                 startKlipper()
@@ -187,6 +196,10 @@ class KlipperHandlerRepositoryImpl(
                 extensionsRepository.startUpNecessaryExtensions()
             }
         }
+    }
+
+    override suspend fun setInstallationProgress(progress: Int) {
+        _installationProgress.emit(progress)
     }
 
     override fun getExtrasStatus() {
@@ -249,7 +262,7 @@ class KlipperHandlerRepositoryImpl(
         startMainsail()
         Thread {
             while (!klipperIsRunning()) {
-                Thread.sleep(1_000)
+                Thread.sleep(10_000)
             }
             _serverState.value = KlipperServerStatus.Running
         }.start()
@@ -365,7 +378,6 @@ class KlipperHandlerRepositoryImpl(
         //bootstrapRepository.runCommand("service ssh status").waitAndPrintOutput(logger)
         //bootstrapRepository.runCommand("service ssh start").waitAndPrintOutput(logger)
         //bootstrapRepository.runCommand("service ssh status").waitAndPrintOutput(logger)
-        bootstrapRepository.runCommand("cd /home/klipper; sh ./get_kiauh.sh", bash = false).waitAndPrintOutput(logger)
     }
 
     override fun stopSSH() {
@@ -374,7 +386,7 @@ class KlipperHandlerRepositoryImpl(
         //systemctl("status", "ssh").waitAndPrintOutput(logger)
 
         sshdProcess?.destroy()
-        bootstrapRepository.runCommand("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
+        //bootstrapRepository.runCommand("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
         logger.log(this) { "killed sshd" }
     }
 

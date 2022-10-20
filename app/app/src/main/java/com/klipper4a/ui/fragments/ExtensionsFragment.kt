@@ -10,14 +10,16 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.asLiveData
 import com.klipper4a.R
+import com.klipper4a.repository.BootstrapRepository
 import com.klipper4a.repository.ExtensionsRepository
+import com.klipper4a.repository.KlipperHandlerRepository
 import com.klipper4a.repository.OctoPrintHandlerRepository
 import com.klipper4a.ui.views.ExtensionView
 import kotlinx.android.synthetic.main.fragment_extensions.*
 import org.koin.android.ext.android.inject
 
 class ExtensionsFragment : Fragment() {
-    val octoPrintHandlerRepository: OctoPrintHandlerRepository by inject()
+    val klipperHandlerRepository: KlipperHandlerRepository by inject()
     val extensionsRepository: ExtensionsRepository by inject()
 
     override fun onCreateView(

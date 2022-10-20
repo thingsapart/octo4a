@@ -38,6 +38,7 @@
                         android:textSize="16sp"
                         android:text="Extensions allow for customization of octo4a. Click here to learn more."
                         />
+
             </LinearLayout>
 
         </com.google.android.material.card.MaterialCardView>

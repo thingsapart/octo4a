@@ -128,7 +128,8 @@ class OctoPrintHandlerRepositoryImpl(
                 logger.log { "No bootstrap detected, proceeding with installation" }
                 _serverState.emit(ServerStatus.InstallingBootstrap)
                 bootstrapRepository.apply {
-                    setupBootstrap()
+                    val flow = MutableStateFlow(0)
+                    setupBootstrap(flow)
                 }
                 logger.log { "Bootstrap installed" }
                 _serverState.emit(ServerStatus.DownloadingOctoPrint)

@@ -9,6 +9,9 @@
 # This file may be distributed under the terms of the GNU GPLv3 license #
 #=======================================================================#
 
+set -x
+export TERM=linux
+
 set -e
 clear
 

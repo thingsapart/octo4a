@@ -3,10 +3,12 @@
     <string name="landing_install">Install Klipper</string>
     <string name="landing_no_installation">No existing installation detected</string>
     <string name="landing_description">This application will install Klipper, Moonraker and Mainsail on your android device. Please
-        make sure that you have at least 700mb of storage available. You will also need an OTG cable in order to connect
-        your phone to your 3d printer.\n\nThis project is an unofficial product, not affiliated with OctoPrint project.
-        This application is a fork of Octoprint For Android (Octo4A), all credit goes to the original authors (feelfreelinux).
-        See https://github.com/feelfreelinux/octo4a
+        make sure that you have at least 4.7GB (yep, lots of default dependencies!) of storage available.
+        You will also need an OTG cable in order to connect your phone to your 3d printer.\n\n
+        This project is an unofficial product, not affiliated with OctoPrint or Klipper projects.\n\n
+        This application is a fork of Octoprint For Android (Octo4A) to install Klipper instead, all credit goes to the original authors (feelfreelinux).\n\n
+        See https://github.com/feelfreelinux/octo4a for the original sources.\n\n
+        All source code for this app is at https://github.com/thingsapart/octo4a .
     </string>
     <string name="installation_step_bootstrap">Installing bootstrap (%1$s)…</string>
     <string name="installation_step_klipper">Installing Klipper…</string>
@@ -63,6 +65,7 @@
     <string name="bugreport_dialog_msg">Octo4a is currently under rapid development. Enabling anonymous bug reporting makes it easier for developers to see what caused the app to malfunction and improve it. You can always change this setting later in the app\'s preferences.</string>
     <string name="bugreport_dialog_dismiss">No</string>
     <string name="bugreport_dialog_enable">Yes, enable reporting</string>
+    <string name="klipper_logo">Klipper Logo</string>
 
 
 </resources>
