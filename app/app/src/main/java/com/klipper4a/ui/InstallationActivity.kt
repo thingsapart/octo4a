@@ -95,18 +95,18 @@ class InstallationActivity : AppCompatActivity() {
     }
 
     private fun setItemsState(status: KlipperServerStatus) {
-        bootstrapItem.setStatus(status, KlipperServerStatus.InstallingBootstrap)
-        installngKlipperItem.setStatus(status, KlipperServerStatus.InstallingKlipper)
-        installingMoonrakerItem.setStatus(status, KlipperServerStatus.InstallingMoonraker)
-        installingMainsailtem.setStatus(status, KlipperServerStatus.InstallingMainsail)
-        bootingKlipperItem.setStatus(status, KlipperServerStatus.BootingUp)
-        installationCompleteItem.setStatus(status, KlipperServerStatus.Running)
+        bootstrapItem.setStatus(status, KlipperServerStatus.InstallingBootstrap, KlipperServerStatus.InstalledBootstrap)
+        installngKlipperItem.setStatus(status, KlipperServerStatus.InstallingKlipper, KlipperServerStatus.InstalledKlipper)
+        installingMoonrakerItem.setStatus(status, KlipperServerStatus.InstallingMoonraker, KlipperServerStatus.InstalledMoonraker)
+        installingMainsailtem.setStatus(status, KlipperServerStatus.InstallingMainsail, KlipperServerStatus.InstalledMainsail)
+        bootingKlipperItem.setStatus(status, KlipperServerStatus.BootingUp, KlipperServerStatus.BootingUp)
+        installationCompleteItem.setStatus(status, KlipperServerStatus.Running, KlipperServerStatus.Running)
     }
 
-    private fun InstallationProgressItem.setStatus(currentStatus: KlipperServerStatus, requiredStatus: KlipperServerStatus) {
-        status = requiredStatus
-        isLoading = currentStatus.value <= requiredStatus.value
-        if (currentStatus.value < requiredStatus.value) {
+    private fun InstallationProgressItem.setStatus(currentStatus: KlipperServerStatus, installingStatus: KlipperServerStatus, doneStatus: KlipperServerStatus) {
+        status = if (currentStatus >= doneStatus) doneStatus else installingStatus
+        isLoading = currentStatus.value < doneStatus.value
+        if (currentStatus.value < installingStatus.value) {
             setUpcoming()
         }
 

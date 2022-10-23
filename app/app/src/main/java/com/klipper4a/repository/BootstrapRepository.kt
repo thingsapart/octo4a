@@ -199,10 +199,9 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
 
                 // Turn ssh on for easier debug
                 if (BuildConfig.DEBUG) {
-                    runCommand("passwd").setPassword("klipper")
-                    runCommand("passwd klipper").setPassword("klipper")
+                    // runCommand("passwd").setPassword("klipper")
+                    //erunCommand("passwd klipper").setPassword("klipper")
                     // runCommand("/usr/sbin/sshd -p 2137")
-                    runCommand("/usr/sbin/dropbear -p 8022")
                 }
 
                 logger.log(this) { "Bootstrap installation done" }

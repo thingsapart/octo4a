@@ -111,5 +111,8 @@ sed -i "s/\/home\/root\//\/root\//g" /etc/nginx/sites-enabled/mainsail
 mkdir -p /system_status
 with_retries touch /system_status/mainsail.installed
 
+# Copy example config to make sure klipper starts.
+with_retries cp "/root/klipper/config/example.cfg" "/root/printer_data/config/printer.cfg
+
 echo ">> DONE INSTALLING MAINSAIL"
 exit 0

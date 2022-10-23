@@ -14,6 +14,10 @@
     <string name="installation_step_klipper">Installing Klipper…</string>
     <string name="installation_step_moonraker">Installing Moonraker…</string>
     <string name="installation_step_mainsail">Installing Mainsail…</string>
+    <string name="installation_step_bootstrap_done">Bootstrap installed (%1$s).</string>
+    <string name="installation_step_klipper_done">Klipper installed.</string>
+    <string name="installation_step_moonraker_done">Moonraker installed.</string>
+    <string name="installation_step_mainsail_done">Mainsail installed.</string>
     <string name="installation_step_bootup">Starting Klipper for the first time…</string>
     <string name="installation_step_done">Installation complete</string>
     <string name="status_starting">Klipper is starting…</string>

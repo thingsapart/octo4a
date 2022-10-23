@@ -128,7 +128,7 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     // Bugsnag bug reporting
-    implementation("com.bugsnag:bugsnag-android:5.12.0")
+    // implementation("com.bugsnag:bugsnag-android:5.12.0")
 
     // Test dependencies
     testImplementation("junit:junit:4.13")

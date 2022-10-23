@@ -31,6 +31,12 @@ constructor(private val ctx: Context, private val attributeSet: AttributeSet? = 
                 KlipperServerStatus.InstallingKlipper -> resources.getString(R.string.installation_step_klipper)
                 KlipperServerStatus.InstallingMoonraker -> resources.getString(R.string.installation_step_moonraker)
                 KlipperServerStatus.InstallingMainsail -> resources.getString(R.string.installation_step_mainsail)
+
+                KlipperServerStatus.InstalledBootstrap -> resources.getString(R.string.installation_step_bootstrap_done, getArchString())
+                KlipperServerStatus.InstalledKlipper -> resources.getString(R.string.installation_step_klipper_done)
+                KlipperServerStatus.InstalledMoonraker -> resources.getString(R.string.installation_step_moonraker_done)
+                KlipperServerStatus.InstalledMainsail -> resources.getString(R.string.installation_step_mainsail_done)
+
                 KlipperServerStatus.BootingUp -> resources.getString(R.string.installation_step_bootup)
                 KlipperServerStatus.Running -> resources.getString(R.string.installation_step_done)
                 else -> "Unknown status"

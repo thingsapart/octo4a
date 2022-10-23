@@ -1,7 +1,11 @@
 package com.klipper4a.repository
 
+import android.app.Activity
 import android.content.Context
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import com.klipper4a.R
 import com.klipper4a.serial.VSPPty
 import com.klipper4a.utils.*
@@ -16,6 +20,12 @@ import java.util.regex.Matcher
 import java.util.regex.Pattern
 import kotlin.math.roundToInt
 
+fun Context.toast(message: CharSequence): Unit {
+    val handler = Handler(Looper.getMainLooper());
+    handler.post {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+}
 
 enum class KlipperServerStatus(val value: Int, val progress: Boolean=false) {
     InstallingBootstrap(0),
@@ -131,7 +141,7 @@ class KlipperHandlerRepositoryImpl(
             _cameraServerStatus.value = value
         }
 
-    private suspend fun preinstallKoauh() {
+    private suspend fun preinstallKiauh() {
         bootstrapRepository.apply {
             runCommand(
                 "mkdir -p bootstrap/root/kiauh/scripts",
@@ -147,10 +157,18 @@ class KlipperHandlerRepositoryImpl(
         }
     }
 
-        override suspend fun installKlipper() {
+    override suspend fun installKlipper() {
+        if (!bootstrapRepository.isBootstrapInstalled) {
+            _serverState.emit(KlipperServerStatus.InstallingBootstrap)
+            context.toast("Bootstrap installation not found, continue to reinstall")
+            return
+        }
+
         _serverState.emit(KlipperServerStatus.InstallingKlipper)
         if (!bootstrapRepository.isKlipperInstalled) {
             withContext(Dispatchers.IO) {
+                preinstallKiauh()
+
                 bootstrapRepository.apply {
                     logger.log { "Copying setup script files to bootstrap..." }
 
@@ -167,9 +185,6 @@ class KlipperHandlerRepositoryImpl(
                     copyResToBootstrap(R.raw.virtualenv, "/root/virtualenv")
 
                     runCommand("cd /root; bash ./get_kiauh.sh", root=true).waitAndPrintOutput(logger)
-                    runCommand("cd /root/kiauh; ls", root=true).waitAndPrintOutput(logger)
-
-                    Thread.sleep(5_000)
 
                     setInstallationProgress(35)
 
@@ -185,6 +200,12 @@ class KlipperHandlerRepositoryImpl(
     }
 
     override suspend fun installMoonraker() {
+        if (!bootstrapRepository.isKlipperInstalled) {
+            _serverState.emit(KlipperServerStatus.InstallingKlipper)
+            context.toast("Klipper installation not found, continue to reinstall")
+            return
+        }
+
         _serverState.emit(KlipperServerStatus.InstallingMoonraker)
         if (!bootstrapRepository.isMoonrakerInstalled) {
             bootstrapRepository.apply {
@@ -204,6 +225,12 @@ class KlipperHandlerRepositoryImpl(
     }
 
     override suspend fun installMainsail() {
+        if (!bootstrapRepository.isMoonrakerInstalled) {
+            _serverState.emit(KlipperServerStatus.InstallingMoonraker)
+            context.toast("Moonraker installation not found, continue to reinstall")
+            return
+        }
+
         _serverState.emit(KlipperServerStatus.InstallingMainsail)
         if (!bootstrapRepository.isMainsailInstalled) {
             bootstrapRepository.apply {
@@ -264,6 +291,7 @@ class KlipperHandlerRepositoryImpl(
     }
 
     override fun installExtras() {
+        /*
         if (_extrasStatus.value == KlipperExtrasStatus.NotInstalled) {
             Thread {
                 _extrasStatus.value = KlipperExtrasStatus.Installing
@@ -274,6 +302,7 @@ class KlipperHandlerRepositoryImpl(
                 _extrasStatus.value = KlipperExtrasStatus.Installed
             }.start()
         }
+         */
     }
 
     fun getPid(p: Process): Int {
@@ -402,24 +431,6 @@ class KlipperHandlerRepositoryImpl(
         bootstrapRepository.resetSSHPassword(password)
     }
 
-    private fun stuff() {
-        bootstrapRepository.apply {
-            copyResToBootstrap(R.raw.get_kiauh, "/home/klipper/get_kiauh.sh")
-
-            runCommand(
-                "cd /home/klipper; chown klipper get_kiauh.sh; chmod a+x get_kiauh.sh; chown klipper /home/klipper/scripts/*",
-                bash = false
-            ).waitAndPrintOutput(logger)
-
-            val gitCmd =
-                runCommand("./get_kiauh.sh")
-            gitCmd.waitAndPrintOutput(
-                logger
-            )
-            gitCmd.waitFor()
-        }
-    }
-
     override fun startSSH() {
         stopSSH()
         //systemctl("start", "dropbear").waitAndPrintOutput(logger)
@@ -437,7 +448,7 @@ class KlipperHandlerRepositoryImpl(
         //systemctl("status", "ssh").waitAndPrintOutput(logger)
 
         sshdProcess?.destroy()
-        //bootstrapRepository.runCommand("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
+        bootstrapRepository.runCommand("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
         logger.log(this) { "killed sshd" }
     }
 

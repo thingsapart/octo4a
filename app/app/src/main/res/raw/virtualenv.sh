@@ -1,8 +1,9 @@
 #!/bin/sh
+echo "virtualenv $@"
+
 set -x
 set -e
 
-PY=python3
 PY=python3
 if [ "$1" = "-p" ] ; then
   PY=`which $2`

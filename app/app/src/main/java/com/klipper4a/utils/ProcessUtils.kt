@@ -1,6 +1,6 @@
 package com.klipper4a.utils
 
-import com.bugsnag.android.Bugsnag
+// import com.bugsnag.android.Bugsnag
 import com.klipper4a.repository.LogType
 import com.klipper4a.repository.LoggerRepository
 import kotlinx.coroutines.CoroutineScope
@@ -23,7 +23,7 @@ fun Process.waitAndPrintOutput(logger: LoggerRepository, type: LogType = LogType
 fun Process.waitForDoneInstallingAndPrintOutput(logger: LoggerRepository, type: LogType = LogType.BOOTSTRAP): String {
     var outputStr = ""
     val reader = BufferedReader(InputStreamReader(inputStream))
-    var line: String = ""
+    var line = ""
     while ( reader.readLine()?.also { line = it } != null) {
         logger.log(this, type) { line }
         outputStr += line

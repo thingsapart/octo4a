@@ -51,7 +51,7 @@ for package in libjpeg-dev zlib1g-dev; do
 done
 
 cd "/root/moonraker/scripts"
-sed "s/\(check_klipper\|cleanup_legacy\|verify_ready\|install_packages\|create_virtualenv\|start_software\|install_script\)\s*$/eval ''/g" "install-moonraker.sh" > "install-moonraker-src.sh"
+sed "s/\(init_data_path\|check_polkit_rules\|check_klipper\|cleanup_legacy\|verify_ready\|install_packages\|create_virtualenv\|start_software\|install_script\)\s*$/eval ''/g" "install-moonraker.sh" > "install-moonraker-src.sh"
 cat "install-moonraker-src.sh"
 
 source "install-moonraker-src.sh"
@@ -61,7 +61,7 @@ with_retries install_packages
 with_retries create_virtualenv
 with_retries init_data_path
 with_retries install_script
-with_retries check_polkit_rules
+# with_retries check_polkit_rules
 
 if [ $DISABLE_SYSTEMCTL = "n" ]; then
     start_software
@@ -69,3 +69,8 @@ fi
 
 mkdir -p /system_status
 with_retries touch /system_status/moonraker.installed
+
+echo ">> DONE INSTALLING MOONRAKER"
+echo ""
+echo ""
+echo ""
