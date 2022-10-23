@@ -22,7 +22,7 @@ import java.io.File
 
 // OctoprintService handles foreground service that OctoPrintManager resides in
 class OctoPrintService() : LifecycleService() {
-    private val handlerRepository: KlipperHandlerRepository by inject()
+    public val handlerRepository: KlipperHandlerRepository by inject()
     private val bootstrapRepository: BootstrapRepository by inject()
     private val fifoEventRepository: FIFOEventRepository by inject()
     private val extensionsRepository: ExtensionsRepository by inject()

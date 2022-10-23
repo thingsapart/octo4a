@@ -19,14 +19,18 @@ import kotlin.math.roundToInt
 
 enum class KlipperServerStatus(val value: Int, val progress: Boolean=false) {
     InstallingBootstrap(0),
-    InstallingKlipper(1),
-    InstallingMoonraker(2),
-    InstallingMainsail(3),
-    BootingUp(4, true),
-    Running(5),
-    ShuttingDown(6, true),
-    Stopped(7),
-    Corrupted(8)
+    InstalledBootstrap(1),
+    InstallingKlipper(2),
+    InstalledKlipper(3),
+    InstallingMoonraker(4),
+    InstalledMoonraker(5),
+    InstallingMainsail(6),
+    InstalledMainsail(7),
+    BootingUp(8, true),
+    Running(9),
+    ShuttingDown(10, true),
+    Stopped(11),
+    Corrupted(12)
 }
 
 enum class KlipperExtrasStatus {
@@ -80,6 +84,12 @@ interface KlipperHandlerRepository {
     fun getConfigValue(value: String): String
     var isCameraServerRunning: Boolean
     val isSSHConfigured: Boolean
+
+    suspend fun installMainsail()
+    suspend fun installMoonraker()
+    suspend fun installKlipper()
+
+    suspend fun start()
 }
 
 class KlipperHandlerRepositoryImpl(
@@ -121,43 +131,34 @@ class KlipperHandlerRepositoryImpl(
             _cameraServerStatus.value = value
         }
 
-    override suspend fun beginInstallation() {
-        withContext(Dispatchers.IO) {
-            if (!bootstrapRepository.isBootstrapInstalled) {
-                logger.log { "No bootstrap detected, proceeding with installation" }
-                _serverState.emit(KlipperServerStatus.InstallingBootstrap)
-                bootstrapRepository.apply {
-                    setupBootstrap(_installationProgress)
-                }
-                logger.log { "Bootstrap installed" }
+    private suspend fun preinstallKoauh() {
+        bootstrapRepository.apply {
+            runCommand(
+                "mkdir -p bootstrap/root/kiauh/scripts",
+                prooted = false,
+                bash = false
+            ).waitAndPrintOutput(logger)
 
-                _serverState.emit(KlipperServerStatus.InstallingKlipper)
+            copyResToBootstrap(R.raw.kiauh_preamble, "/root/scripts/kiauh_preamble.sh")
+            copyResToBootstrap(R.raw.get_kiauh, "/root/get_kiauh.sh")
+            runCommand("ls -al /root/scripts/", root = true).waitAndPrintOutput(logger)
+
+            runCommand("chmod a+x get_kiauh.sh", root = true).waitAndPrintOutput(logger)
+        }
+    }
+
+        override suspend fun installKlipper() {
+        _serverState.emit(KlipperServerStatus.InstallingKlipper)
+        if (!bootstrapRepository.isKlipperInstalled) {
+            withContext(Dispatchers.IO) {
                 bootstrapRepository.apply {
                     logger.log { "Copying setup script files to bootstrap..." }
-                    runCommand("mkdir -p bootstrap/root/kiauh/scripts", prooted = false, bash = false).waitAndPrintOutput(logger)
 
                     // Scripts for calling Kiauh directly without the TUI.
-                    //copyResToBootstrap(R.raw.install_klipper, "/home/klipper/scripts/install_klipper.sh")
-                    //copyResToBootstrap(R.raw.install_mainsail, "/home/klipper/scripts/install_mainsail.sh")
-                    //copyResToBootstrap(R.raw.install_moonraker, "/home/klipper/scripts/install_moonraker.sh")
-                    //copyResToBootstrap(R.raw.ld_preload, "/home/klipper/scripts/ld_preload.sh")
-                    //copyResToBootstrap(R.raw.kiauh_preamble, "/home/klipper/scripts/kiauh_preamble.sh")
-                    //copyResToBootstrap(R.raw.get_kiauh, "/home/klipper/get_kiauh.sh")
-
-                    runCommand("mkdir -p /root/scripts", root=true).waitAndPrintOutput(logger)
                     runCommand("ls -al /root/scripts", root=true).waitAndPrintOutput(logger)
                     copyResToBootstrap(R.raw.install_klipper, "/root/scripts/install_klipper.sh")
-                    copyResToBootstrap(R.raw.install_mainsail, "/root/scripts/install_mainsail.sh")
-                    copyResToBootstrap(R.raw.install_moonraker, "/root/scripts/install_moonraker.sh")
                     copyResToBootstrap(R.raw.ld_preload, "/root/scripts/ld_preload.sh")
-                    copyResToBootstrap(R.raw.kiauh_preamble, "/root/scripts/kiauh_preamble.sh")
-                    copyResToBootstrap(R.raw.get_kiauh, "/root/get_kiauh.sh")
-                    runCommand("ls -al /root/scripts/", root=true).waitAndPrintOutput(logger)
-
-                    //runProot("cd /home/klipper/; chmod a+x get_kiauh.sh", root=true).waitAndPrintOutput(logger)
-                    runCommand("ls; cd /root; pwd; chmod a+x get_kiauh.sh", root=true).waitAndPrintOutput(logger)
-                    runCommand("ldd /bin/bash", root=true).waitAndPrintOutput(logger)
-                    runCommand("ldd /bin/sh", root=true).waitAndPrintOutput(logger)
+                    runCommand("chmod 700 /root/scripts/*", root = true).waitAndPrintOutput(logger)
 
                     setInstallationProgress(25)
 
@@ -165,8 +166,10 @@ class KlipperHandlerRepositoryImpl(
                     // Virtualenv otherwise fails with permission denied in proot.
                     copyResToBootstrap(R.raw.virtualenv, "/root/virtualenv")
 
-                    runCommand("cd /root; ./get_kiauh.sh", root=true).waitAndPrintOutput(logger)
+                    runCommand("cd /root; bash ./get_kiauh.sh", root=true).waitAndPrintOutput(logger)
                     runCommand("cd /root/kiauh; ls", root=true).waitAndPrintOutput(logger)
+
+                    Thread.sleep(5_000)
 
                     setInstallationProgress(35)
 
@@ -174,44 +177,75 @@ class KlipperHandlerRepositoryImpl(
                     runCommand("cd /root/kiauh; echo 'yes' | ./install_klipper.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
 
                     logger.log { "Klipper installed" }
-                    setInstallationProgress(40)
                 }
-
-                _serverState.emit(KlipperServerStatus.InstallingMoonraker)
-                bootstrapRepository.apply {
-                    logger.log { "Installing Moonraker" }
-                    runCommand("cd /root/kiauh; ./install_moonraker.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
-                    logger.log { "Moonraker installed" }
-
-                    setInstallationProgress(85)
-                }
-
-                _serverState.emit(KlipperServerStatus.InstallingMainsail)
-                bootstrapRepository.apply {
-                    logger.log { "Installing Mainsail" }
-                    runCommand("cd /root/kiauh; ./install_mainsail.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
-                    logger.log { "Mainsail installed" }
-
-                    setInstallationProgress(95)
-                }
-
-                _serverState.emit(KlipperServerStatus.BootingUp)
-                vspPty.cancelPtyThread()
-                Thread.sleep(10)
-                vspPty.runPtyThread()
-                startKlipper()
-                logger.log { "Dependencies installed" }
-
-                setInstallationProgress(100)
-            } else {
-                getExtrasStatus()
-                startKlipper()
-                if (preferences.enableSSH) {
-                    logger.log { "Enabling ssh" }
-                    startSSH()
-                }
-                extensionsRepository.startUpNecessaryExtensions()
             }
+        }
+        setInstallationProgress(40)
+        _serverState.emit(KlipperServerStatus.InstalledKlipper)
+    }
+
+    override suspend fun installMoonraker() {
+        _serverState.emit(KlipperServerStatus.InstallingMoonraker)
+        if (!bootstrapRepository.isMoonrakerInstalled) {
+            bootstrapRepository.apply {
+                logger.log { "Installing Moonraker" }
+                copyResToBootstrap(R.raw.install_moonraker, "/root/scripts/install_moonraker.sh")
+                runCommand("chmod 700 /root/scripts/*", root = true).waitAndPrintOutput(logger)
+
+                runCommand(
+                    "cd /root/scripts; ./install_moonraker.sh",
+                    root = true
+                ).waitForDoneInstallingAndPrintOutput(logger)
+                logger.log { "Moonraker installed" }
+            }
+        }
+        setInstallationProgress(85)
+        _serverState.emit(KlipperServerStatus.InstalledMoonraker)
+    }
+
+    override suspend fun installMainsail() {
+        _serverState.emit(KlipperServerStatus.InstallingMainsail)
+        if (!bootstrapRepository.isMainsailInstalled) {
+            bootstrapRepository.apply {
+                logger.log { "Installing Mainsail" }
+                copyResToBootstrap(R.raw.install_mainsail_from_kiauh, "/root/scripts/install_mainsail.sh")
+                runCommand("chmod 700 /root/scripts/*", root = true).waitAndPrintOutput(logger)
+
+                runCommand(
+                    "cd /root/scripts; ./install_mainsail.sh",
+                    root = true
+                ).waitForDoneInstallingAndPrintOutput(logger)
+                logger.log { "Mainsail installed" }
+            }
+        }
+        setInstallationProgress(95)
+        _serverState.emit(KlipperServerStatus.InstalledMainsail)
+    }
+
+    override suspend fun beginInstallation() {
+        _serverState.emit(KlipperServerStatus.InstallingBootstrap)
+        if (!bootstrapRepository.isBootstrapInstalled) {
+            withContext(Dispatchers.IO) {
+                logger.log { "No bootstrap detected, proceeding with installation" }
+                bootstrapRepository.apply {
+                    setupBootstrap(_installationProgress)
+                    runCommand("mkdir -p /root/scripts", root = true).waitAndPrintOutput(logger)
+                }
+                logger.log { "Bootstrap installed" }
+            }
+        }
+        setInstallationProgress(15)
+        _serverState.emit(KlipperServerStatus.InstalledBootstrap)
+    }
+
+    override suspend fun start() {
+        _serverState.emit(KlipperServerStatus.InstallingMoonraker)
+        bootstrapRepository.apply {
+            logger.log { "Installing Moonraker" }
+            runCommand("cd /root/kiauh; ./install_moonraker.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
+            logger.log { "Moonraker installed" }
+
+            setInstallationProgress(85)
         }
     }
 

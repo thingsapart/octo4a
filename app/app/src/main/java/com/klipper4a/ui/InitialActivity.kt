@@ -89,7 +89,7 @@ class InitialActivity: AppCompatActivity() {
     }
 
     private fun startApp() {
-        if (!bootstrapRepository.isBootstrapInstalled) {
+        if (!bootstrapRepository.isBootstrapInstalled || !bootstrapRepository.isKlipperInstalled || !bootstrapRepository.isMoonrakerInstalled || !bootstrapRepository.isMainsailInstalled) {
             startOctoService()
             val intent = Intent(this, InstallationActivity::class.java)
             startActivity(intent)

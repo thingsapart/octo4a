@@ -31,6 +31,9 @@ interface BootstrapRepository {
     val isBootstrapInstalled: Boolean
     val isSSHConfigured: Boolean
     val isArgonFixApplied: Boolean
+    val isKlipperInstalled: Boolean
+    val isMoonrakerInstalled: Boolean
+    val isMainsailInstalled: Boolean
 }
 
 class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val githubRepository: GithubRepository, val context: Context) : BootstrapRepository {
@@ -147,7 +150,6 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 if (!STAGING_PREFIX_FILE.renameTo(PREFIX_FILE)) {
                     throw RuntimeException("Unable to rename staging folder")
                 }
-
                 copyRes(R.raw.run_bootstrap, "run-distro.sh")
                 copyRes(R.raw.run_bootstrap, "run-bootstrap.sh")
                 runCommand("chmod a+x run-distro.sh run-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
@@ -178,45 +180,29 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 progress.emit(15)
 
                 copyRes(R.raw.install_bootstrap, "install-bootstrap.sh")
-                runCommand("chmod a+x install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
                 runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
                 runCommand("cat /etc/lsb-release").waitAndPrintOutput(logger)
 
-                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger) // sometimes fails, nop if already exists
-                runCommand("whoami", root = false).waitAndPrintOutput(logger)
+                copyResToBootstrap(R.raw.systemctl3, "/bin/systemctl.new")
 
-                logger.log(this) { "Installed $DISTRO_NAME bootstrap. Configuring..." }
+                logger.log{ ">>>>>>>>>>>>>> SETTING UP BASE SYSTEM <<<<<<<<<<<<<<<" }
+
+                copyResToBootstrap(R.raw.setup_base_system, "/root/setup-base-system.sh")
+                runCommand("chmod 700 ./bootstrap/root/setup-base-system.sh", prooted = false).waitAndPrintOutput(logger)
+                runCommand("/root/setup-base-system.sh").waitAndPrintOutput(logger)
 
                 // Install some dependencies.
-                runCommand("apt-get update --allow-releaseinfo-change").waitAndPrintOutput(logger)
-                runCommand("apt-get install -q -y dropbear curl bash sudo git unzip 2>&1").waitAndPrintOutput(logger)
-                runCommand("echo 'klipper     ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", root = true, bash = false).waitAndPrintOutput(logger)
                 ///runCommand("apt-get install -q -y dropbear curl bash sudo python3 python3-virtualenv virtualenv git unzip 2>&1").waitAndPrintOutput(logger)
                 // python3-virtualenv doesn't seem to work well in (this?) proot - we're supplying our own hacky shim later.
 
                 progress.emit(20)
 
-                // Setup docker-systemctl-replacement systemctl simulation.
-                runCommand("mv /bin/systemctl /bin/systemctl.org").waitAndPrintOutput(logger)
-                copyResToBootstrap(R.raw.systemctl3, "/bin/systemctl")
-                runCommand("chmod a+x /bin/systemctl").waitAndPrintOutput(logger)
-
-                // Setup ssh.
-                runCommand("ssh-keygen -A 2>&1").waitAndPrintOutput(logger)
-
-                // Add klipper user.
-                //runCommand("sh add-user.sh klipper", prooted = false).waitAndPrintOutput(logger)
-                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger)
-                runCommand("/usr/sbin/adduser klipper --gecos 'Klipper User,RoomNumber,WorkPhone,HomePhone' --disabled-password").waitAndPrintOutput(logger) // sometimes fails, nop if already exists
-                runCommand("echo 'klipper     ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers", root = true, bash = false).waitAndPrintOutput(logger)
-                runCommand("passwd").setPassword("klipper")
-                runCommand("passwd klipper").setPassword("klipper")
-
                 // Turn ssh on for easier debug
                 if (BuildConfig.DEBUG) {
-//                    runCommand("passwd").setPassword("klipper")
-//                    runCommand("passwd klipper").setPassword("klipper")
-//                    runCommand("/usr/sbin/sshd -p 2137")
+                    runCommand("passwd").setPassword("klipper")
+                    runCommand("passwd klipper").setPassword("klipper")
+                    // runCommand("/usr/sbin/sshd -p 2137")
+                    runCommand("/usr/sbin/dropbear -p 8022")
                 }
 
                 logger.log(this) { "Bootstrap installation done" }
@@ -341,5 +327,11 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
     }
 
     override val isBootstrapInstalled: Boolean
-        get() = File("$FILES_PATH/bootstrap/bootstrap").exists()
+        get() = File("$FILES_PATH/bootstrap/bootstrap/system_status/base_system.installed").exists()
+    override val isKlipperInstalled: Boolean
+        get() = File("$FILES_PATH/bootstrap/bootstrap/system_status/klipper.installed").exists()
+    override val isMoonrakerInstalled: Boolean
+        get() = File("$FILES_PATH/bootstrap/bootstrap/system_status/moonraker.installed").exists()
+    override val isMainsailInstalled: Boolean
+        get() = File("$FILES_PATH/bootstrap/bootstrap/system_status/mainsail.installed").exists()
 }

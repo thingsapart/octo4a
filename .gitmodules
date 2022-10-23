@@ -1,0 +1,3 @@
+[submodule "proot"]
+	path = proot
+	url = https://github.com/proot-me/proot.git

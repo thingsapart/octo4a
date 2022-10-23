@@ -1,58 +1,50 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+retries=3
+wait_sec=5
 
-source kiauh_preamble.sh
+set -e
+set -x
 
-# Overwrite clone_klipper. Somehow git does not work when called from scripts in proot? Locking?
-function clone_klipper__not_used() {
-  local repo=${1} branch=${2}
+retries=3
+wait_sec=5
 
-  [[ -z ${repo} ]] && repo="${KLIPPER_REPO}"
-  repo=$(echo "${repo}" | sed -r "s/^(http|https):\/\/github\.com\///i; s/\.git$//")
-  repo="https://github.com/${repo}"
+set -e
+set -x
+retries=3
+wait_sec=5
 
-  [[ -z ${branch} ]] && branch="master"
-
-  ### force remove existing klipper dir and clone into fresh klipper dir
-  [[ -d ${KLIPPER_DIR} ]] && rm -rf "${KLIPPER_DIR}"
-
-  status_msg "Downloading Klipper from ${repo} ..."
-
-  cd "${HOME}" || exit 1
-  if curl -L -s ${repo}/archive/refs/heads/${branch}.zip -o ${KLIPPER_DIR}; then
-    status_msg "Success!"
-  else
-    print_error "Cloning Klipper from\n ${repo}\n failed!"
-    exit 1
-  fi
+set -e
+function with_retries {
+  for ((i=1; i<=retries; i++)); do
+      echo "::> $@"
+      if $@ 2>&1; then
+        echo "RET: $?"
+        break
+      fi
+      echo "NORET: $?"
+      if [ "$i" == "$retries" ]; then
+        exit 1
+      fi
+      echo ">> Failed - retrying in ${wait_sec}s."
+      sleep ${wait_sec}
+  done
+  echo "DONE"
 }
 
-# Set up for directly calling klipper_setup()
-user_input=()
-user_input+=("python3")
-user_input+=("1")
+cd /root
+with_retries "rm -rf klipper klippy-env"
+with_retries "git clone --branch master --single-branch https://github.com/Klipper3d/klipper.git"
 
-klipper_setup "${user_input[@]}"
+cd "/root/klipper/scripts"
+sed "s/\(verify_ready\|install_packages\|create_virtualenv\|start_software\|install_script\)\s*$//g" install-debian.sh > install-deb-src.sh
+cat "install-deb-src.sh"
+source "install-deb-src.sh"
 
-# Octo4A uses a "shimmed" ioctlHook lib to intercept ioctls to the serial port, we need to preload it.
-# So copy a preload script and rewrite KLIPPY_ENV to call this from systemd scripts instead and prefix
-# the intended command.
-cp ${SCRIPT_DIR}/ld_preload.sh ${KLIPPY_ENV}
-KLIPPY_ENV="${KLIPPY_ENV}/ld_preload.sh ${KLIPPY_ENV}"
+with_retries install_packages
+with_retries create_virtualenv
+with_retries install_script
+with_retries start_software
 
-# Copied from Kiauh callsite of write_klipper_service(), here we call it again with modified KLIPPY_ENV
-# to rewrite systemd service with proper ld-preload. We can't monkey-patch KLIPPY_ENV earlier.
-cfg_dir="${KLIPPER_CONFIG}"
-cfg="${cfg_dir}/printer.cfg"
-log="${KLIPPER_LOGS}/klippy.log"
-printer="/tmp/printer"
-uds="/tmp/klippy_uds"
-service="${SYSTEMD}/klipper.service"
-### write single instance service
-sudo rm -f ${service}
-write_klipper_service "" "${cfg}" "${log}" "${printer}" "${uds}" "${service}"
-
-echo ">> DONE INSTALLING KLIPPER"
-
-exit 0
+mkdir -p /system_status
+with_retries touch /system_status/klipper.installed

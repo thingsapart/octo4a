@@ -12,6 +12,13 @@ import com.klipper4a.ui.views.InstallationProgressItem
 import com.klipper4a.utils.preferences.MainPreferences
 import com.klipper4a.viewmodel.InstallationViewModel
 import kotlinx.android.synthetic.main.activity_installation_progress.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class InstallationActivity : AppCompatActivity() {
@@ -33,7 +40,18 @@ class InstallationActivity : AppCompatActivity() {
         installationViewModel.serverStatus.observe(this) {
             // progressTextView.text = "${it.getInstallationProgress()}%"
             setItemsState(it)
-            continueButton.isEnabled = it == KlipperServerStatus.Running
+            when (it) {
+                KlipperServerStatus.Running,
+                KlipperServerStatus.InstalledBootstrap,
+                KlipperServerStatus.InstalledMainsail,
+                KlipperServerStatus.InstalledMoonraker,
+                KlipperServerStatus.InstalledKlipper -> {
+                    continueButton.isEnabled = true
+                }
+                else -> {
+                    continueButton.isEnabled = false
+                }
+            }
         }
 
         installationViewModel.installationProgress.observe(this) {
@@ -41,9 +59,33 @@ class InstallationActivity : AppCompatActivity() {
         }
 
         continueButton.setOnClickListener {
-            stopService(Intent(this, OctoPrintService::class.java))
-            val intent = Intent(this, InitialActivity::class.java)
-            startActivity(intent)
+            when (installationViewModel.serverStatus.value) {
+                KlipperServerStatus.Corrupted -> {
+                    GlobalScope.launch(Dispatchers.IO) {
+                        installationViewModel.klipperHandlerRepository.beginInstallation()
+                    }
+                }
+                KlipperServerStatus.InstalledBootstrap -> {
+                    GlobalScope.launch(Dispatchers.IO) {
+                        installationViewModel.klipperHandlerRepository.installKlipper()
+                    }
+                }
+                KlipperServerStatus.InstalledKlipper -> {
+                    GlobalScope.launch(Dispatchers.IO) {
+                        installationViewModel.klipperHandlerRepository.installMoonraker()
+                    }
+                }
+                KlipperServerStatus.InstalledMoonraker -> {
+                    GlobalScope.launch(Dispatchers.IO) {
+                        installationViewModel.klipperHandlerRepository.installMainsail()
+                    }
+                }
+                else -> {
+                    stopService(Intent(this, OctoPrintService::class.java))
+                    val intent = Intent(this, InitialActivity::class.java)
+                    startActivity(intent)
+                }
+            }
         }
 
         logsButton.setOnClickListener {

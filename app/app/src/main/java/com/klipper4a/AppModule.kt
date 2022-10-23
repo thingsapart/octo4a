@@ -34,7 +34,7 @@ val appModule = module {
     }
 
     factory { MainPreferences(androidContext()) }
-    factory <GithubRepository> { GithubRepositoryImpl(get()) }
+    factory<GithubRepository> { GithubRepositoryImpl(get()) }
     factory<BootstrapRepository> { BootstrapRepositoryImpl(get(), get(), androidContext()) }
 
     single<FIFOEventRepository> { FIFOEventRepositoryImpl(get()) }
