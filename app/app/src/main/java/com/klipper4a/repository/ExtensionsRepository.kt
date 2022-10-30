@@ -210,6 +210,12 @@ class ExtensionsRepositoryImpl(
 
         val f = File(extensionsPath)
         val files = f.listFiles()
+
+        if (files == null) {
+            _extensionsState.value = validExtensions
+            return
+        }
+
         for (inFile in files) {
             if (inFile.isDirectory) {
                 try {

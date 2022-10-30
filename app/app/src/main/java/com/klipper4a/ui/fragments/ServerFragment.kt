@@ -121,47 +121,73 @@ class ServerFragment : Fragment() {
 
         btnExec.setOnClickListener {
             bootstrapRepository.apply {
-                Thread.sleep(5_000)
-
-                logger.log { "Copying setup script files to bootstrap..." }
-                runCommand("mkdir -p bootstrap/root/kiauh/scripts", prooted = false, bash = false).waitAndPrintOutput(logger)
-
-                // Scripts for calling Kiauh directly without the TUI.
-                //copyResToBootstrap(R.raw.install_klipper, "/home/klipper/scripts/install_klipper.sh")
-                //copyResToBootstrap(R.raw.install_mainsail, "/home/klipper/scripts/install_mainsail.sh")
-                //copyResToBootstrap(R.raw.install_moonraker, "/home/klipper/scripts/install_moonraker.sh")
-                //copyResToBootstrap(R.raw.ld_preload, "/home/klipper/scripts/ld_preload.sh")
-                //copyResToBootstrap(R.raw.kiauh_preamble, "/home/klipper/scripts/kiauh_preamble.sh")
-                //copyResToBootstrap(R.raw.get_kiauh, "/home/klipper/get_kiauh.sh")
-
-                runCommand("mkdir -p /root/scripts", root=true).waitAndPrintOutput(logger)
-                runCommand("ls -al /root/scripts", root=true).waitAndPrintOutput(logger)
-                copyResToBootstrap(R.raw.install_klipper_from_kiauh, "/root/scripts/install_klipper.sh")
-                copyResToBootstrap(R.raw.install_mainsail_from_kiauh, "/root/scripts/install_mainsail.sh")
-                copyResToBootstrap(R.raw.install_moonraker_from_kiauh, "/root/scripts/install_moonraker.sh")
-                copyResToBootstrap(R.raw.ld_preload, "/root/scripts/ld_preload.sh")
-                copyResToBootstrap(R.raw.kiauh_preamble, "/root/scripts/kiauh_preamble.sh")
-                copyResToBootstrap(R.raw.get_kiauh, "/root/get_kiauh.sh")
-                runCommand("ls -al /root/scripts/", root=true).waitAndPrintOutput(logger)
-
-                //runProot("cd /home/klipper/; chmod a+x get_kiauh.sh", root=true).waitAndPrintOutput(logger)
-                runCommand("ls; cd /root; pwd; chmod a+x get_kiauh.sh", root=true).waitAndPrintOutput(logger)
-                runCommand("ldd /bin/bash", root=true).waitAndPrintOutput(logger)
-                runCommand("ldd /bin/sh", root=true).waitAndPrintOutput(logger)
-
-                // Hacky virtualenv shim, just symlinks the system binaries and runs pip as root.
-                // Virtualenv otherwise fails with permission denied in proot.
-                copyResToBootstrap(R.raw.virtualenv, "/root/virtualenv")
-
-                runCommand("cd /root; bash ./get_kiauh.sh", root=true).waitAndPrintOutput(logger)
-                runCommand("cd /root/kiauh; ls", root=true).waitAndPrintOutput(logger)
+                copyResToBootstrap(R.raw.systemctl, "/bin/systemctl")
+                runCommand("chmod 700 /bin/systemctl").waitAndPrintOutput(logger)
 
                 Thread.sleep(5_000)
+                if (false) {
 
-                //runProot("cd kiauh; echo 'yes' | bash ./install_klipper.sh", root=true).waitAndPrintOutput(logger)
-                runCommand("cd /root/kiauh; echo 'yes' | ./install_klipper.sh", root=true).waitForDoneInstallingAndPrintOutput(logger)
+                    logger.log { "Copying setup script files to bootstrap..." }
+                    runCommand(
+                        "mkdir -p bootstrap/root/kiauh/scripts",
+                        prooted = false,
+                        bash = false
+                    ).waitAndPrintOutput(logger)
 
-                logger.log { "Klipper installed" }
+                    // Scripts for calling Kiauh directly without the TUI.
+                    //copyResToBootstrap(R.raw.install_klipper, "/home/klipper/scripts/install_klipper.sh")
+                    //copyResToBootstrap(R.raw.install_mainsail, "/home/klipper/scripts/install_mainsail.sh")
+                    //copyResToBootstrap(R.raw.install_moonraker, "/home/klipper/scripts/install_moonraker.sh")
+                    //copyResToBootstrap(R.raw.ld_preload, "/home/klipper/scripts/ld_preload.sh")
+                    //copyResToBootstrap(R.raw.kiauh_preamble, "/home/klipper/scripts/kiauh_preamble.sh")
+                    //copyResToBootstrap(R.raw.get_kiauh, "/home/klipper/get_kiauh.sh")
+
+                    runCommand("mkdir -p /root/scripts", root = true).waitAndPrintOutput(logger)
+                    runCommand("ls -al /root/scripts", root = true).waitAndPrintOutput(logger)
+                    copyResToBootstrap(
+                        R.raw.install_klipper_from_kiauh,
+                        "/root/scripts/install_klipper.sh"
+                    )
+                    copyResToBootstrap(
+                        R.raw.install_mainsail_from_kiauh,
+                        "/root/scripts/install_mainsail.sh"
+                    )
+                    copyResToBootstrap(
+                        R.raw.install_moonraker_from_kiauh,
+                        "/root/scripts/install_moonraker.sh"
+                    )
+                    copyResToBootstrap(R.raw.ld_preload, "/root/scripts/ld_preload.sh")
+                    copyResToBootstrap(R.raw.kiauh_preamble, "/root/scripts/kiauh_preamble.sh")
+                    copyResToBootstrap(R.raw.get_kiauh, "/root/get_kiauh.sh")
+                    runCommand("ls -al /root/scripts/", root = true).waitAndPrintOutput(logger)
+
+                    //runProot("cd /home/klipper/; chmod a+x get_kiauh.sh", root=true).waitAndPrintOutput(logger)
+                    runCommand(
+                        "ls; cd /root; pwd; chmod a+x get_kiauh.sh",
+                        root = true
+                    ).waitAndPrintOutput(logger)
+                    runCommand("ldd /bin/bash", root = true).waitAndPrintOutput(logger)
+                    runCommand("ldd /bin/sh", root = true).waitAndPrintOutput(logger)
+
+                    // Hacky virtualenv shim, just symlinks the system binaries and runs pip as root.
+                    // Virtualenv otherwise fails with permission denied in proot.
+                    copyResToBootstrap(R.raw.virtualenv, "/root/virtualenv")
+
+                    runCommand("cd /root; bash ./get_kiauh.sh", root = true).waitAndPrintOutput(
+                        logger
+                    )
+                    runCommand("cd /root/kiauh; ls", root = true).waitAndPrintOutput(logger)
+
+                    Thread.sleep(5_000)
+
+                    //runProot("cd kiauh; echo 'yes' | bash ./install_klipper.sh", root=true).waitAndPrintOutput(logger)
+                    runCommand(
+                        "cd /root/kiauh; echo 'yes' | ./install_klipper.sh",
+                        root = true
+                    ).waitForDoneInstallingAndPrintOutput(logger)
+
+                    logger.log { "Klipper installed" }
+                }
             }
         }
 

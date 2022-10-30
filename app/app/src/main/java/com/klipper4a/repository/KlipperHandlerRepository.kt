@@ -213,8 +213,10 @@ class KlipperHandlerRepositoryImpl(
                 copyResToBootstrap(R.raw.install_moonraker, "/root/scripts/install_moonraker.sh")
                 runCommand("chmod 700 /root/scripts/*", root = true).waitAndPrintOutput(logger)
 
+                // Moonraker will refuse to server directories outside /home (e.g. /root).
+                runCommand("mkdir /etc/moonraker").waitAndPrintOutput(logger)
                 runCommand(
-                    "cd /root/scripts; ./install_moonraker.sh",
+                    "cd /root/scripts; ./install_moonraker.sh -d /etc/moonraker/printer_data",
                     root = true
                 ).waitForDoneInstallingAndPrintOutput(logger)
                 logger.log { "Moonraker installed" }
@@ -251,18 +253,28 @@ class KlipperHandlerRepositoryImpl(
 
     override suspend fun beginInstallation() {
         _serverState.emit(KlipperServerStatus.InstallingBootstrap)
-        if (!bootstrapRepository.isBootstrapInstalled) {
-            withContext(Dispatchers.IO) {
-                logger.log { "No bootstrap detected, proceeding with installation" }
-                bootstrapRepository.apply {
-                    setupBootstrap(_installationProgress)
-                    runCommand("mkdir -p /root/scripts", root = true).waitAndPrintOutput(logger)
+        if (!bootstrapRepository.isBootstrapInstalled || !bootstrapRepository.isKlipperInstalled || !bootstrapRepository.isMoonrakerInstalled || !bootstrapRepository.isMainsailInstalled) {
+            if (!bootstrapRepository.isBootstrapInstalled) {
+                withContext(Dispatchers.IO) {
+                    logger.log { "No bootstrap detected, proceeding with installation" }
+                    bootstrapRepository.apply {
+                        setupBootstrap(_installationProgress)
+                        runCommand("mkdir -p /root/scripts", root = true).waitAndPrintOutput(logger)
+                    }
+                    logger.log { "Bootstrap installed" }
                 }
-                logger.log { "Bootstrap installed" }
+                setInstallationProgress(15)
             }
+            _serverState.emit(KlipperServerStatus.InstalledBootstrap)
+        } else {
+            getExtrasStatus()
+            startKlipper()
+            if (preferences.enableSSH) {
+                logger.log { "Enabling ssh" }
+                startSSH()
+            }
+            extensionsRepository.startUpNecessaryExtensions()
         }
-        setInstallationProgress(15)
-        _serverState.emit(KlipperServerStatus.InstalledBootstrap)
     }
 
     override suspend fun start() {
@@ -448,7 +460,7 @@ class KlipperHandlerRepositoryImpl(
         //systemctl("status", "ssh").waitAndPrintOutput(logger)
 
         sshdProcess?.destroy()
-        bootstrapRepository.runCommand("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
+        // bootstrapRepository.runCommand("kill -9 $(pidof dropbear)").waitAndPrintOutput(logger)
         logger.log(this) { "killed sshd" }
     }
 

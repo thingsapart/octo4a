@@ -56,6 +56,8 @@ cat "install-moonraker-src.sh"
 
 source "install-moonraker-src.sh"
 
+echo "!DATA PATH: $DATA_PATH"
+
 with_retries cleanup_legacy
 with_retries install_packages
 with_retries create_virtualenv
@@ -63,12 +65,12 @@ with_retries init_data_path
 with_retries install_script
 # with_retries check_polkit_rules
 
-if [ $DISABLE_SYSTEMCTL = "n" ]; then
-    start_software
-fi
-
 mkdir -p /system_status
 with_retries touch /system_status/moonraker.installed
+
+# Moonraker will determine it's running in proot and disable write to printer directories
+# because it refuses to validate the service.
+echo "validate_service: false" >> "${DATA_PATH}/config/moonraker.conf"
 
 echo ">> DONE INSTALLING MOONRAKER"
 echo ""

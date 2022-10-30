@@ -183,13 +183,16 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 runCommand("sh install-bootstrap.sh", prooted = false).waitAndPrintOutput(logger)
                 runCommand("cat /etc/lsb-release").waitAndPrintOutput(logger)
 
-                copyResToBootstrap(R.raw.systemctl3, "/bin/systemctl.new")
+                // copyResToBootstrap(R.raw.systemctl3, "/bin/systemctl.new")
+                copyResToBootstrap(R.raw.systemctl, "/bin/systemctl.new")
 
                 logger.log{ ">>>>>>>>>>>>>> SETTING UP BASE SYSTEM <<<<<<<<<<<<<<<" }
 
                 copyResToBootstrap(R.raw.setup_base_system, "/root/setup-base-system.sh")
                 runCommand("chmod 700 ./bootstrap/root/setup-base-system.sh", prooted = false).waitAndPrintOutput(logger)
                 runCommand("/root/setup-base-system.sh").waitAndPrintOutput(logger)
+
+                logger.log{ ">>>>>>>>>>>>>> DONE SETTING UP BASE SYSTEM <<<<<<<<<<<<<<<" }
 
                 // Install some dependencies.
                 ///runCommand("apt-get install -q -y dropbear curl bash sudo python3 python3-virtualenv virtualenv git unzip 2>&1").waitAndPrintOutput(logger)
@@ -200,7 +203,7 @@ class BootstrapRepositoryImpl(private val logger: LoggerRepository, private val 
                 // Turn ssh on for easier debug
                 if (BuildConfig.DEBUG) {
                     // runCommand("passwd").setPassword("klipper")
-                    //erunCommand("passwd klipper").setPassword("klipper")
+                    // runCommand("passwd klipper").setPassword("klipper")
                     // runCommand("/usr/sbin/sshd -p 2137")
                 }
 
